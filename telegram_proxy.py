@@ -65,6 +65,27 @@ def derive_secret_from_uuid(config_uuid: str, salt: str = "spider-tg-proxy") -> 
     return secret_bytes.hex()
 
 
+
+def is_docker_available() -> bool:
+    """Compatibility hook for the panel lifecycle.
+
+    Telegram inbounds are served by the built-in MTProto listener in this
+    version, so Docker is intentionally not required. Returning False keeps
+    the legacy lifecycle imports compatible without starting extra containers.
+    """
+    return False
+
+
+async def run_docker_telegram_proxy(*args, **kwargs):
+    """Legacy compatibility shim; built-in MTProto server is used instead."""
+    logger.info("Docker Telegram proxy is disabled; using built-in MTProto listener")
+    return None
+
+
+async def stop_docker_telegram_proxy(*args, **kwargs):
+    """Legacy compatibility shim; no Docker proxy is started."""
+    return None
+
 def is_telegram_dc(ip: str) -> bool:
     """Check if an IP belongs to Telegram datacenter ranges."""
     try:
