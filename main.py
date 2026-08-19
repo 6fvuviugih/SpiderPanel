@@ -2943,6 +2943,18 @@ async def update_inbound(inbound_id: str, request: Request, _=Depends(require_au
             ib["wireguard_settings"] = body["wireguard_settings"]
         if "telegram_settings" in body and isinstance(body["telegram_settings"], dict):
             ib["telegram_settings"] = body["telegram_settings"]
+
+        if (ib.get("protocol") or "").lower() == "telegram":
+            ib["sni"] = ""
+            ib["destination"] = ""
+            ib["server_name"] = ""
+            tg = ib.setdefault("telegram_settings", {})
+            tg["internal_port"] = int(tg.get("internal_port") or body.get("port") or ib.get("port") or 44344)
+            tg["external_port"] = int(tg.get("external_port") or body.get("external_port") or ib.get("external_port") or 443)
+            tg["external_domain"] = str(tg.get("external_domain") or body.get("external_domain") or ib.get("external_domain") or "").strip()
+            ib["port"] = tg["internal_port"]
+            ib["external_port"] = tg["external_port"]
+            ib["external_domain"] = tg["external_domain"]
         if (ib.get("protocol") or "").lower() == "telegram":
             tg = ib.setdefault("telegram_settings", {})
             # Telegram never exposes/stores SNI, Destination or Server Name.
@@ -5789,7 +5801,7 @@ async def scan_railway_ips(_=Depends(require_auth)):
 # ══════════════════════════════════════════════════════════════════════════════
 
 CF_API = "https://api.cloudflare.com/client/v4"
-CF_TOKEN_LINK = "https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22account_settings%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_kv_storage%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_routes%22%2C%22type%22%3A%22edit%22%7D%5D&accountId=%2A&zoneId=all&name=spider-Token"
+CF_TOKEN_LINK = "https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_routes%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_kv_storage%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_r2%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22dns%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22zone%22%2C%22type%22%3A%22read%22%7D%5D&accountId=%2A&zoneId=all&name=spider-Token"
 
 # Worker script deployed to the user's Cloudflare account lives in the project
 # at worker/_worker.js (NOT under /static, so it is never served to the web).
@@ -5999,6 +6011,13 @@ async def _worker_deploy() -> tuple:
         return r.status_code, deploy_json
     except Exception as e:
         return 0, {"errors": [{"message": str(e)}]}
+
+
+async def _worker_enable_workers_dev() -> dict:
+    acct=str(WORKER.get("account_id") or ""); name=str(WORKER.get("worker_name") or ""); token=str(WORKER.get("token") or "")
+    if not acct or not name or not token: return {"ok":False,"detail":"worker credentials missing"}
+    code,data=await _cf_api("POST",f"/accounts/{acct}/workers/scripts/{name}/subdomain",token,{"enabled":True,"previews_enabled":False},email="")
+    return {"ok":code==200 and bool(data.get("success")),"status":code,"data":data}
 
 
 async def _worker_sync_users() -> dict:
@@ -6360,22 +6379,24 @@ async def worker_setup(request: Request, _=Depends(require_auth)):
     Account ID is auto-detected from the token — no manual entry needed."""
     body = await request.json()
     token = str(body.get("token") or "").strip()
+    # Account ID and Email are intentionally not collected from the user.
+    # The account is discovered from the supplied API token.
     account_id = ""
     email = ""
     if not token:
-        raise HTTPException(status_code=400, detail="Cloudflare API Token is required")
+        raise HTTPException(status_code=400, detail="token is required")
 
     # 1. Verify the API token.
     _is_gak = _is_cf_gak(token)
     verify_path = "/user/tokens/verify" if not _is_gak else "/user"
-    code, data = await _cf_api("GET", verify_path, token)
+    code, data = await _cf_api("GET", verify_path, token, email=email)
     if code != 200 or not data.get("success"):
         msg = (data.get("errors") or [{}])[0].get("message", "invalid token")
         raise HTTPException(status_code=400, detail=f"Cloudflare token rejected: {msg}")
 
     # 2. Auto-detect account_id if not provided (list accounts and pick the first one).
     if not account_id:
-        code_acc, data_acc = await _cf_api("GET", "/accounts", token)
+        code_acc, data_acc = await _cf_api("GET", "/accounts", token, email=email)
         if code_acc == 200 and data_acc.get("result"):
             accounts = data_acc["result"]
             if isinstance(accounts, list) and len(accounts) > 0:
@@ -6386,14 +6407,14 @@ async def worker_setup(request: Request, _=Depends(require_auth)):
     # 3. Discover the worker name + subdomain from the account.
     worker_name = str(body.get("worker_name") or "spider-proxy").strip()
     worker_domain = ""
-    code, data = await _cf_api("GET", f"/accounts/{account_id}/workers/subdomain", token)
+    code, data = await _cf_api("GET", f"/accounts/{account_id}/workers/subdomain", token, email=email)
     if code == 200 and data.get("result"):
         subdom = str(data["result"].get("subdomain") or "").strip()
         if subdom:
             worker_domain = _worker_safe_domain(f"{worker_name}.{subdom}.workers.dev")
     if not worker_domain:
         # Fallback: try to read the existing script's domain (if it was deployed before).
-        code2, data2 = await _cf_api("GET", f"/accounts/{account_id}/workers/scripts/{worker_name}", token)
+        code2, data2 = await _cf_api("GET", f"/accounts/{account_id}/workers/scripts/{worker_name}", token, email=email)
         if code2 in (200, 404):
             pass  # script check only; domain comes from subdomain above
     if not worker_domain:
@@ -6413,6 +6434,7 @@ async def worker_setup(request: Request, _=Depends(require_auth)):
             "connected": True,
             "account_id": account_id,
             "worker_name": worker_name,
+            "cf_email": "",
             "worker_domain": worker_domain,
             "worker_url": f"https://{worker_domain}",
             "token": token,
@@ -6786,6 +6808,34 @@ def _read_sni_results() -> list:
     return out
 
 
+@app.get("/api/scanner/sni-check")
+async def scanner_sni_check(host: str, port: int = 443, _=Depends(require_auth)):
+    """Perform a real TLS handshake using the supplied hostname as SNI."""
+    import ssl
+    host = str(host or "").strip().lower()
+    if not host or len(host) > 253 or any(ch.isspace() for ch in host) or "/" in host:
+        raise HTTPException(status_code=400, detail="invalid SNI host")
+    port = int(port or 443)
+    if port < 1 or port > 65535:
+        raise HTTPException(status_code=400, detail="invalid port")
+    started = time.perf_counter()
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(host, port, ssl=ctx, server_hostname=host), timeout=3.0
+        )
+        ms = round((time.perf_counter() - started) * 1000, 2)
+        try:
+            writer.close(); await writer.wait_closed()
+        except Exception:
+            pass
+        return {"ok": True, "sni": host, "latency_ms": ms, "port": port}
+    except Exception as e:
+        return {"ok": False, "sni": host, "latency_ms": round((time.perf_counter()-started)*1000,2), "port": port, "error": str(e)[:180]}
+
+
 @app.get("/api/scanner/sni-scan-list")
 async def scanner_sni_scan_list(_=Depends(require_auth)):
     """Return the SNI list for scanning."""
@@ -6802,26 +6852,26 @@ async def scanner_sni_results(_=Depends(require_auth)):
 
 @app.post("/api/scanner/sni-save-results")
 async def scanner_sni_save_results(request: Request, _=Depends(require_auth)):
-    """Save the top N fastest SNIs to the results file."""
     body = await request.json()
-    results = body.get("results") or []
-    top_n = int(body.get("top") or 3)
-    # Sort by latency and take top N
-    results.sort(key=lambda r: r.get("latency_ms", 99999))
+    incoming = body.get("results") or []
+    top_n = max(1, min(int(body.get("top") or 3), 10))
+    merged = {}
+    for old in _read_sni_results():
+        name = str(old.get("sni") or "").strip().lower()
+        try: lat = float(old.get("latency_ms"))
+        except Exception: continue
+        if name and lat >= 0: merged[name] = lat
+    for r in incoming:
+        name = str(r.get("sni") or "").strip().lower()
+        try: lat = float(r.get("latency_ms"))
+        except Exception: continue
+        if name and lat >= 0 and (name not in merged or lat < merged[name]): merged[name] = lat
+    results = [{"sni":k,"latency_ms":round(v,2)} for k,v in merged.items()]
+    results.sort(key=lambda x:x["latency_ms"])
     results = results[:top_n]
-    try:
-        f = _sni_result_file()
-        f.parent.mkdir(parents=True, exist_ok=True)
-        lines = ["# Fastest SNIs for Reality (auto-populated by SNI scanner)", "# Format: sni|latency_ms"]
-        for r in results:
-            sni = r.get("sni", "")
-            lat = r.get("latency_ms", 0)
-            if sni:
-                lines.append(f"{sni}|{lat}")
-        f.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    except Exception as e:
-        logger.warning(f"Could not save SNI results: {e}")
-    return {"ok": True, "saved": len(results), "results": results}
+    f=_sni_result_file(); f.parent.mkdir(parents=True,exist_ok=True)
+    f.write_text("# Fastest SNIs for Reality\n# Format: sni|latency_ms\n"+"\n".join(f"{r['sni']}|{r['latency_ms']}" for r in results)+"\n",encoding="utf-8")
+    return {"ok":True,"saved":len(results),"results":results}
 
 
 @app.get("/api/scanner/sni-fastest")

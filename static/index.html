@@ -852,6 +852,9 @@ tr{animation:fadeIn .3s ease}
 @media(max-width:900px){.sidebar-backdrop.show{display:block}}
 .sidebar-tog{display:none}@media(max-width:900px){.sidebar-tog{display:inline-flex!important}}
 
+
+/* TLS has no external domain/port; those fields belong to Reality/Telegram only. */
+#ib-external-fields.tls-hidden{display:none!important}
 </style>
 </head>
 <body>
@@ -1139,7 +1142,7 @@ tr{animation:fadeIn .3s ease}
                   <label>Fake SNI</label>
                   <div style="display:flex;gap:6px;align-items:flex-end">
                     <input type="text" id="spf-fake-sni" placeholder="مثال: www.cloudflare.com" dir="ltr" style="flex:1">
-                    <button class="btn btn-b" style="border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center" onclick="spfPickBestFakeSni()" title="انتخاب بهترین SNI از نتایج اسکن">
+                    <button class="btn btn-b" style="border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center" onclick="spfPingCustomSni()" title="انتخاب بهترین SNI از نتایج اسکن">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                     </button>
                   </div>
@@ -1191,16 +1194,15 @@ tr{animation:fadeIn .3s ease}
           <!-- SETUP (not connected) -->
           <div id="worker-setup">
             <div class="scn-hint px-hint" data-i18n="workerSetupTip">پنل را به Cloudflare Worker متصل کنید تا کاربرانی که Proxy IP انتخاب می‌کنند از مسیر Worker عبور کنند. ترافیک از Railway عبور نمی‌کند.</div>
-            <div class="f-g" style="margin-top:10px"><label data-i18n="cfToken">Cloudflare API Token</label>
-              <div style="display:flex;gap:8px">
-                <input type="password" id="wk-token" dir="ltr" style="flex:1" autocomplete="off">
-                <a class="btn btn-sm btn-g" id="wk-token-link" href="#" target="_blank" rel="noopener" style="text-decoration:none;white-space:nowrap">
-                  <span data-i18n="getToken">ساخت توکن مجاز</span>
-                </a>
+            <div class="f-g" style="margin-top:10px">
+              <label>Cloudflare Token</label>
+              <input type="password" id="wk-token" dir="ltr" autocomplete="off" placeholder="Cloudflare API Token">
+              <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+                <a class="btn btn-sm btn-b" href="https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_kv_storage%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_routes%22%2C%22type%22%3A%22edit%22%7D%5D&accountId=%2A&zoneId=all&name=Spider-Worker-Token" target="_blank" rel="noopener" style="text-decoration:none">ساخت Token با دسترسی مجاز</a>
+                <span class="px-hint" style="margin:0">Workers Scripts Edit + Workers KV Storage Edit + Workers Routes Edit</span>
               </div>
-              <div class="px-hint" data-i18n="workerTokenHint">این توکن باید دسترسی Workers Scripts، Workers KV Storage و Workers Routes را داشته باشد؛ Account ID به‌صورت خودکار از توکن پیدا می‌شود.</div>
             </div>
-            <div class="px-hint" data-i18n="workerAutoName">نام و دامنه Worker به‌صورت خودکار از اکانت Cloudflare گرفته می‌شود.</div>
+            <div class="px-hint" data-i18n="workerAutoName">Account ID و Email به‌صورت خودکار از Token تشخیص داده می‌شوند.</div>
             <button class="btn btn-p" style="width:100%;margin-top:10px" onclick="workerSetup()"><span data-i18n="cfConnect">اتصال و Deploy</span></button>
           </div>
 
@@ -1302,11 +1304,16 @@ tr{animation:fadeIn .3s ease}
           <div class="panel-h"><span class="glow" data-i18n="contact">Contact Me</span></div>
           <p class="contact-sub" data-i18n="contactSub">برای پشتیبانی و همکاری با من در ارتباط باشید</p>
           <div class="contact-bubbles">
-            <a class="contact-bubble tg" href="https://t.me/spider_vpn1" target="_blank" rel="noopener" title="Telegram">
+            <a class="contact-bubble tg" href="https://t.me/amirsp1ider" target="_blank" rel="noopener" title="Telegram">
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
               <span>Telegram</span>
             </a>
-            <a class="contact-bubble gh" href="https://github.com/amirappleidfd-stack" target="_blank" rel="noopener" title="GitHub">
+            <a class="contact-bubble tg" href="https://t.me/SPiDER_VPN1" target="_blank" rel="noopener" title="Telegram">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+              <span>Telegram</span>
+              <small>SPiDER_VPN1</small>
+            </a>
+            <a class="contact-bubble gh" href="https://github.com/amirh00sain/SpiderPanel" target="_blank" rel="noopener" title="GitHub">
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-.3.063-.61.095-.88.095-1.74 0-2.13-1.32-2.13-1.32-.285-.72-.695-1.313-1.238-1.673-.99-.675.06-.662.06-.662 1.08.06 1.65 1.065 1.65 1.065.96 1.65 2.52 1.173 3.135.897.097-.698.375-1.173.682-1.442-2.38-.27-4.875-1.19-4.875-5.31 0-1.173.42-2.133 1.11-2.883-.11-.27-.48-1.362.105-2.838 0 0 .907-.285 2.97 1.105.87-.24 1.8-.36 2.73-.36.93 0 1.86.12 2.73.36 2.06-1.39 2.97-1.105 2.97-1.105.586 1.476.216 2.568.105 2.838.69.75 1.11 1.71 1.11 2.883 0 4.13-2.5 5.035-4.885 5.31.385.33.72.98.72 1.975 0 1.425-.015 2.57-.015 2.92 0 .32.22.695.825.575C20.565 22.09 24 17.595 24 12.297 24 5.67 18.63.297 12 .297z"/></svg>
               <span>GitHub</span>
             </a>
@@ -1483,7 +1490,7 @@ var LANG = localStorage.getItem('spider-lang') || 'fa';
 var I18N = {
   fa: {
     'dash': 'داشبورد', 'users': 'کاربران', 'inbounds': 'اینباندها', 'scanner': 'اسکنر IP', 'worker': 'Worker', 'settings': 'تنظیمات', 'contact': 'Contact Me', 'logout': 'خروج',
-    'workerSetupTip': 'پنل را به Cloudflare Worker متصل کنید تا کاربرانی که Proxy IP انتخاب می‌کنند از مسیر Worker عبور کنند. ترافیک از Railway عبور نمی‌کند.', 'cfToken': 'Cloudflare API Token', 'getToken': 'گرفتن توکن', 'cfAccountId': 'Account ID', 'cfWorkerName': 'Worker Name', 'cfWorkerDomain': 'Worker Domain', 'cfConnect': 'اتصال و Deploy', 'connected': 'متصل', 'disconnected': 'قطع', 'workerStatus': 'وضعیت', 'workerUrl': 'Worker URL', 'lastSync': 'آخرین Sync', 'lastError': 'آخرین خطا', 'proxyPool': 'Proxy IP Pool', 'addProxy': 'افزودن کشور', 'workerSettings': 'تنظیمات Worker', 'removeConn': 'حذف اتصال Worker', 'noProxyYet': 'هنوز کشوری اضافه نکرده‌اید', 'connecting': 'در حال اتصال...', 'workerConnected': 'Worker متصل و Deploy شد', 'syncing': 'در حال Sync...', 'synced': 'Sync شد', 'confirmRemoveWorker': 'اتصال Worker حذف شود؟', 'workerRemoved': 'اتصال Worker حذف شد', 'proxyCodePrompt': 'کد کشور (مثلا de):', 'proxyCountryPrompt': 'نام کشور:', 'proxyHostPrompt': 'آدرس Proxy IP (مثلا de.example.com):', 'proxyPortPrompt': 'پورت Proxy IP:', 'proxySaved': 'کشور ذخیره و Worker بروزرسانی شد', 'confirmDelProxy': 'این کشور حذف شود؟', 'proxyDeleted': 'کشور حذف شد', 'workerFillAll': 'همه فیلدها را پر کنید', 'workerProxyEnabled': 'Worker Proxy IP', 'workerProxyNone': 'بدون Proxy', 'workerRouteTip': 'کانفیگ کاربر روی دامنه Worker با مسیر /route/{کد کشور} ساخته می‌شود و از Railway عبور نمی‌کند.', 'workerAutoName': 'نام و دامنه Worker به‌صورت خودکار از اکانت Cloudflare گرفته می‌شود.', 'workerTokenHint': 'این توکن باید دسترسی Workers Scripts، Workers KV Storage و Workers Routes را داشته باشد؛ Account ID به‌صورت خودکار از توکن پیدا می‌شود.', 'proxySource': 'منبع پروکسی روزانه', 'autoSyncHourly': 'بروزرسانی خودکار (ساعتی)', 'updateNow': 'بروزرسانی از منبع', 'updatingFromSource': 'در حال بروزرسانی از منبع', 'sourceUpdated': 'بروزرسانی شد', 'sourceError': 'خطا در بروزرسانی منبع', 'countries': 'کشور', 'syncsDone': 'تعداد بروزرسانی‌ها', 'pickCountry': 'یک کشور انتخاب کنید',
+    'workerSetupTip': 'پنل را به Cloudflare Worker متصل کنید تا کاربرانی که Proxy IP انتخاب می‌کنند از مسیر Worker عبور کنند. ترافیک از Railway عبور نمی‌کند.', 'cfToken': 'Cloudflare API Token', 'getToken': 'گرفتن توکن', 'cfAccountId': 'Account ID', 'cfWorkerName': 'Worker Name', 'cfWorkerDomain': 'Worker Domain', 'cfConnect': 'اتصال و Deploy', 'connected': 'متصل', 'disconnected': 'قطع', 'workerStatus': 'وضعیت', 'workerUrl': 'Worker URL', 'lastSync': 'آخرین Sync', 'lastError': 'آخرین خطا', 'proxyPool': 'Proxy IP Pool', 'addProxy': 'افزودن کشور', 'workerSettings': 'تنظیمات Worker', 'removeConn': 'حذف اتصال Worker', 'noProxyYet': 'هنوز کشوری اضافه نکرده‌اید', 'connecting': 'در حال اتصال...', 'workerConnected': 'Worker متصل و Deploy شد', 'syncing': 'در حال Sync...', 'synced': 'Sync شد', 'confirmRemoveWorker': 'اتصال Worker حذف شود؟', 'workerRemoved': 'اتصال Worker حذف شد', 'proxyCodePrompt': 'کد کشور (مثلا de):', 'proxyCountryPrompt': 'نام کشور:', 'proxyHostPrompt': 'آدرس Proxy IP (مثلا de.example.com):', 'proxyPortPrompt': 'پورت Proxy IP:', 'proxySaved': 'کشور ذخیره و Worker بروزرسانی شد', 'confirmDelProxy': 'این کشور حذف شود؟', 'proxyDeleted': 'کشور حذف شد', 'workerFillAll': 'همه فیلدها را پر کنید', 'workerProxyEnabled': 'Worker Proxy IP', 'workerProxyNone': 'بدون Proxy', 'workerRouteTip': 'کانفیگ کاربر روی دامنه Worker با مسیر /route/{کد کشور} ساخته می‌شود و از Railway عبور نمی‌کند.', 'workerAutoName': 'نام و دامنه Worker به‌صورت خودکار از اکانت Cloudflare گرفته می‌شود.', 'proxySource': 'منبع پروکسی روزانه', 'autoSyncHourly': 'بروزرسانی خودکار (ساعتی)', 'updateNow': 'بروزرسانی از منبع', 'updatingFromSource': 'در حال بروزرسانی از منبع', 'sourceUpdated': 'بروزرسانی شد', 'sourceError': 'خطا در بروزرسانی منبع', 'countries': 'کشور', 'syncsDone': 'تعداد بروزرسانی‌ها', 'pickCountry': 'یک کشور انتخاب کنید',
     'tab.dash': 'داشبورد', 'tab.users': 'مدیریت کاربران', 'tab.inbounds': 'مدیریت اینباندها', 'tab.scanner': 'اسکنر آی‌پی', 'tab.settings': 'تنظیمات',
     'inboundFixedHint': 'فقط اینباندهای پیش‌فرض پنل استفاده می‌شوند. WS/TLS به‌صورت خودکار با دامنه اصلی پنل آماده است؛ Reality را با دامنه و پورت خودتان تکمیل کنید (کلید pbk به‌صورت خودکار ساخته می‌شود).', 'inboundFixed': 'افزودن اینباند غیرفعال است — فقط اینباندهای پیش‌فرض.', 'inboundAuto': 'این اینباند خودکار است و نیازی به تنظیم ندارد.',
     'newUser': 'کاربر جدید', 'newInbound': 'اینباند جدید', 'domain': 'دامنه',
@@ -1531,7 +1538,7 @@ var I18N = {
   },
   en: {
     'dash': 'Dashboard', 'users': 'Users', 'inbounds': 'Inbounds', 'scanner': 'IP Scanner', 'worker': 'Worker', 'settings': 'Settings', 'contact': 'Contact Me', 'logout': 'Logout',
-    'workerSetupTip': 'Connect the panel to a Cloudflare Worker so users who pick a Proxy IP route through the Worker. Traffic never crosses Railway.', 'cfToken': 'Cloudflare API Token', 'getToken': 'Get Token', 'cfAccountId': 'Account ID', 'cfWorkerName': 'Worker Name', 'cfWorkerDomain': 'Worker Domain', 'cfConnect': 'Connect & Deploy', 'connected': 'Connected', 'disconnected': 'Disconnected', 'workerStatus': 'Status', 'workerUrl': 'Worker URL', 'lastSync': 'Last Sync', 'lastError': 'Last Error', 'proxyPool': 'Proxy IP Pool', 'addProxy': 'Add Country', 'workerSettings': 'Worker Settings', 'removeConn': 'Remove Worker Connection', 'noProxyYet': 'No country added yet', 'connecting': 'Connecting...', 'workerConnected': 'Worker connected & deployed', 'syncing': 'Syncing...', 'synced': 'Synced', 'confirmRemoveWorker': 'Remove the Worker connection?', 'workerRemoved': 'Worker connection removed', 'proxyCodePrompt': 'Country code (e.g. de):', 'proxyCountryPrompt': 'Country name:', 'proxyHostPrompt': 'Proxy IP host (e.g. de.example.com):', 'proxyPortPrompt': 'Proxy IP port:', 'proxySaved': 'Country saved, worker updated', 'confirmDelProxy': 'Delete this country?', 'proxyDeleted': 'Country deleted', 'workerFillAll': 'Fill in all fields', 'workerProxyEnabled': 'Worker Proxy IP', 'workerProxyNone': 'No Proxy', 'workerRouteTip': 'The user config is built on the Worker domain with a /route/{code} path — traffic never crosses Railway.', 'workerAutoName': 'Worker name and domain are fetched automatically from your Cloudflare account.', 'workerTokenHint': 'The token must allow Workers Scripts, Workers KV Storage, and Workers Routes; the Account ID is detected automatically.', 'proxySource': 'Daily Proxy Source', 'autoSyncHourly': 'Auto-update (hourly)', 'updateNow': 'Update Now', 'updatingFromSource': 'Updating from source', 'sourceUpdated': 'Updated', 'sourceError': 'Failed to update source', 'countries': 'countries', 'syncsDone': 'Syncs done', 'pickCountry': 'Pick a country',
+    'workerSetupTip': 'Connect the panel to a Cloudflare Worker so users who pick a Proxy IP route through the Worker. Traffic never crosses Railway.', 'cfToken': 'Cloudflare API Token', 'getToken': 'Get Token', 'cfAccountId': 'Account ID', 'cfWorkerName': 'Worker Name', 'cfWorkerDomain': 'Worker Domain', 'cfConnect': 'Connect & Deploy', 'connected': 'Connected', 'disconnected': 'Disconnected', 'workerStatus': 'Status', 'workerUrl': 'Worker URL', 'lastSync': 'Last Sync', 'lastError': 'Last Error', 'proxyPool': 'Proxy IP Pool', 'addProxy': 'Add Country', 'workerSettings': 'Worker Settings', 'removeConn': 'Remove Worker Connection', 'noProxyYet': 'No country added yet', 'connecting': 'Connecting...', 'workerConnected': 'Worker connected & deployed', 'syncing': 'Syncing...', 'synced': 'Synced', 'confirmRemoveWorker': 'Remove the Worker connection?', 'workerRemoved': 'Worker connection removed', 'proxyCodePrompt': 'Country code (e.g. de):', 'proxyCountryPrompt': 'Country name:', 'proxyHostPrompt': 'Proxy IP host (e.g. de.example.com):', 'proxyPortPrompt': 'Proxy IP port:', 'proxySaved': 'Country saved, worker updated', 'confirmDelProxy': 'Delete this country?', 'proxyDeleted': 'Country deleted', 'workerFillAll': 'Fill in all fields', 'workerProxyEnabled': 'Worker Proxy IP', 'workerProxyNone': 'No Proxy', 'workerRouteTip': 'The user config is built on the Worker domain with a /route/{code} path — traffic never crosses Railway.', 'workerAutoName': 'Worker name and domain are fetched automatically from your Cloudflare account.', 'proxySource': 'Daily Proxy Source', 'autoSyncHourly': 'Auto-update (hourly)', 'updateNow': 'Update Now', 'updatingFromSource': 'Updating from source', 'sourceUpdated': 'Updated', 'sourceError': 'Failed to update source', 'countries': 'countries', 'syncsDone': 'Syncs done', 'pickCountry': 'Pick a country',
     'tab.dash': 'Dashboard', 'tab.users': 'Manage Users', 'tab.inbounds': 'Manage Inbounds', 'tab.scanner': 'IP Scanner', 'tab.settings': 'Settings',
     'inboundFixedHint': 'Only the panel’s default inbounds are used. WS/TLS is ready automatically with the panel’s main domain; fill Reality’s domain & ports yourself (pbk is auto-generated).', 'inboundFixed': 'Adding inbounds is disabled — only the default inbounds.', 'inboundAuto': 'This inbound is automatic — nothing to configure.',
     'newUser': 'New User', 'newInbound': 'New Inbound', 'domain': 'Domain',
@@ -2235,8 +2242,16 @@ function selectedInboundIds() {
   return ids;
 }
 
+function _applyInboundExternalVisibility() {
+  var sec = $id('ib-security') ? $id('ib-security').value : 'tls';
+  var d = $id('ib-extdomain'), p = $id('ib-extport');
+  if (d) { var g=d.closest('.f-g'); if(g) g.style.display = sec === 'reality' ? '' : 'none'; }
+  if (p) { var g2=p.closest('.f-g'); if(g2) g2.style.display = sec === 'reality' ? '' : 'none'; }
+}
+
 function onSecurityChange() {
   var sec = $id('ib-security').value;
+  _applyInboundExternalVisibility();
   var realF = $id('ib-reality-fields');
   if (sec === 'reality') { realF.classList.remove('hidden'); }
   else { realF.classList.add('hidden'); }
@@ -2339,8 +2354,8 @@ async function submitInbound(e) {
     name: $id('ib-name').value,
     protocol: 'vless',
     port: parseInt($id('ib-port').value) || 8443,
-    external_port: parseInt($id('ib-extport').value) || null,
-    external_domain: $id('ib-extdomain').value || '',
+    external_port: security === 'reality' ? (parseInt($id('ib-extport').value) || null) : null,
+    external_domain: security === 'reality' ? ($id('ib-extdomain').value || '') : '',
     network: network,
     security: security,
     sni: sni
@@ -3171,6 +3186,20 @@ function spfLoadAdvDomains() {
   } catch (e) {}
 }
 
+async function spfPingCustomSni() {
+  var el = $id('spf-fake-sni');
+  var host = (el && el.value || '').trim().toLowerCase();
+  if (!host) { toast('ابتدا SNI را وارد کنید', 'warn'); return; }
+  try {
+    var port = parseInt(($id('spf-sni-port') && $id('spf-sni-port').value) || '443', 10);
+    var r = await api('/api/scanner/sni-check?host=' + encodeURIComponent(host) + '&port=' + port);
+    if (!r.ok) { toast('SNI پاسخ نداد: ' + (r.error || 'failed'), 'err'); return; }
+    await api('/api/scanner/sni-save-results', {method:'POST', body:{results:[{sni:host, latency_ms:r.latency_ms}], top:3}});
+    await spfLoadSaved('sni');
+    toast(host + ' — ' + r.latency_ms + ' ms ذخیره شد', 'ok');
+  } catch(e) { toast(e.message || 'خطا در تست SNI', 'err'); }
+}
+
 function spfPickBestFakeSni() {
   // Get the best SNI from SNI scan results
   var best = null;
@@ -3249,7 +3278,6 @@ async function loadWorker() {
   var badge = $id('worker-badge');
   try {
     var w = await api('/api/worker');
-    var tokenLink = $id('wk-token-link'); if (tokenLink && w.token_link) tokenLink.href = w.token_link;
     WK_STATE = w;
     var connected = !!w.connected;
     if (setup) setup.classList.toggle('hidden', connected);

@@ -65,26 +65,24 @@ def derive_secret_from_uuid(config_uuid: str, salt: str = "spider-tg-proxy") -> 
     return secret_bytes.hex()
 
 
-
 def is_docker_available() -> bool:
-    """Compatibility hook for the panel lifecycle.
+    """Compatibility helper for older main.py startup code.
 
-    Telegram inbounds are served by the built-in MTProto listener in this
-    version, so Docker is intentionally not required. Returning False keeps
-    the legacy lifecycle imports compatible without starting extra containers.
+    Telegram Proxy now uses the built-in asyncio MTProto server on the
+    configured internal port, so Docker is not required.
     """
     return False
 
 
-async def run_docker_telegram_proxy(*args, **kwargs):
-    """Legacy compatibility shim; built-in MTProto server is used instead."""
-    logger.info("Docker Telegram proxy is disabled; using built-in MTProto listener")
+def run_docker_telegram_proxy(*args, **kwargs):
+    """Compatibility no-op: the built-in MTProto proxy is used instead."""
     return None
 
 
-async def stop_docker_telegram_proxy(*args, **kwargs):
-    """Legacy compatibility shim; no Docker proxy is started."""
+def stop_docker_telegram_proxy(*args, **kwargs):
+    """Compatibility no-op: the built-in MTProto proxy owns the listener."""
     return None
+
 
 def is_telegram_dc(ip: str) -> bool:
     """Check if an IP belongs to Telegram datacenter ranges."""
@@ -114,10 +112,11 @@ class MTProtoProxyServer:
     def __init__(self, inbound_id: str, port: int, sni: str = "",
                  destination: str = "", server_name: str = ""):
         self.inbound_id = inbound_id
-        self.port = port
-        self.sni = sni
-        self.destination = destination
-        self.server_name = server_name
+        self.port = int(port)
+        # Telegram MTProto does not use SNI / Destination / Server Name.
+        self.sni = ""
+        self.destination = ""
+        self.server_name = ""
 
         # secrets_map: secret_hex -> {user_id, config_uuid, label, ...}
         self._secrets_map: dict = {}
