@@ -430,6 +430,10 @@ WORKER_LOCK = asyncio.Lock()
 # Serialize source syncs (hourly loop + manual button can't overlap).
 WORKER_SYNC_LOCK = asyncio.Lock()
 
+# ── Telegram Proxy Instances ────────────────────────────────────────────────
+# Maps inbound_id → MTProtoProxyServer instance
+TG_PROXY_INSTANCES: dict = {}
+
 # پروتکل‌های پشتیبانی‌شده برای هر کانفیگ
 PROTOCOLS = ("vless-ws", "xhttp-packet-up", "xhttp-stream-up", "xhttp-stream-one")
 
@@ -658,27 +662,23 @@ def _wg_read_endpoints() -> list:
 
 
 def generate_wg_config(user_id: str, user: dict, inbound: dict, remark_tag: str = None) -> str:
-    """Generate an AmneziaWG config for a user based on the inbound settings."""
+    """Generate an AmneziaWG config for a user based on the inbound settings.
+
+    Supports two modes:
+    - WARP mode (warp_mode=True): Uses Cloudflare WARP infrastructure with
+      proper WARP PublicKey, Address (IPv4+IPv6), DNS, and endpoints.
+    - Custom mode (warp_mode=False): Uses user-defined server settings.
+    """
     username = user.get("username", user_id)
     wg = inbound.get("wireguard_settings") or {}
+    warp_mode = bool(wg.get("warp_mode"))
 
-    # Generate per-user WireGuard keys
-    priv_key, pub_key = _wg_gen_keypair()
+    # Generate per-user WireGuard private key
+    priv_key, _ = _wg_gen_keypair()
     if not priv_key:
         return ""
 
-    # Inbound server keys (from wireguard_settings)
-    server_pub = wg.get("server_public_key") or ""
-    if not server_pub:
-        # Generate server keys if not set
-        _, server_pub = _wg_gen_keypair()
-
-    endpoint = wg.get("endpoint") or "8.6.112.4:443"
-    mtu = wg.get("mtu") or "1280"
-    address = wg.get("address") or "172.16.0.2/32"
-    dns = wg.get("dns") or "1.1.1.1,1.0.0.1"
-
-    # AmneziaWG parameters
+    # AmneziaWG obfuscation parameters
     jc = wg.get("jc") or "3"
     jmin = wg.get("jmin") or "1"
     jmax = wg.get("jmax") or "3"
@@ -689,6 +689,27 @@ def generate_wg_config(user_id: str, user: dict, inbound: dict, remark_tag: str 
     h3 = wg.get("h3") or "3"
     h4 = wg.get("h4") or "4"
     i1 = wg.get("i1") or ""
+
+    if warp_mode:
+        # ── WARP mode: use Cloudflare WARP infrastructure ──
+        # Fixed WARP PublicKey (same for all WARP users)
+        server_pub = "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
+        # WARP address: 172.16.0.x/32 + IPv6
+        address = wg.get("address") or "172.16.0.2/32, 2606:4700:110::2/128"
+        # WARP DNS: Cloudflare DNS with IPv6
+        dns = wg.get("dns") or "1.1.1.1, 1.0.0.1, 2606:4700:4700::1111, 2606:4700:4700::1001"
+        mtu = wg.get("mtu") or "1280"
+        # Endpoint from the configured endpoint (should be a Cloudflare WARP IP)
+        endpoint = wg.get("endpoint") or "8.6.112.4:443"
+    else:
+        # ── Custom WireGuard server mode ──
+        server_pub = wg.get("server_public_key") or ""
+        if not server_pub:
+            _, server_pub = _wg_gen_keypair()
+        endpoint = wg.get("endpoint") or "8.6.112.4:443"
+        mtu = wg.get("mtu") or "1280"
+        address = wg.get("address") or "172.16.0.2/32"
+        dns = wg.get("dns") or "1.1.1.1,1.0.0.1"
 
     rem = f"Spider-{username}-WG"
     if remark_tag:
@@ -720,8 +741,15 @@ Endpoint = {endpoint}
 
 
 def generate_telegram_proxy_link(user_id: str, user: dict, inbound: dict, remark_tag: str = None) -> str:
-    """Generate a Telegram Proxy link for a user based on the inbound settings."""
+    """Generate a Telegram Proxy link for a user based on the inbound settings.
+
+    The secret is deterministic per user (derived from config_uuid) and stored
+    on the user record so it remains stable across config regenerations.
+    """
+    from telegram_proxy import derive_secret_from_uuid
+
     username = user.get("username", user_id)
+    config_uuid = user.get("config_uuid", user_id)
     tg = inbound.get("telegram_settings") or {}
 
     external_domain = tg.get("external_domain") or inbound.get("external_domain") or ""
@@ -729,14 +757,15 @@ def generate_telegram_proxy_link(user_id: str, user: dict, inbound: dict, remark
     if not external_domain:
         return ""
 
-    # Generate a unique secret for this user (hex string)
-    secret = secrets.token_hex(16)
+    # Use stored secret or derive a stable one
+    secret = user.get("telegram_secret") or derive_secret_from_uuid(config_uuid)
 
     rem = f"Spider-{username}-TG"
     if remark_tag:
         rem = f"{rem} {remark_tag}"
 
-    link = f"https://t.me/proxy?server={external_domain}&port={external_port}&secret={secret}"
+    from urllib.parse import quote
+    link = f"https://t.me/proxy?server={external_domain}&port={external_port}&secret={secret}#{quote(rem)}"
     return link
 
 
@@ -1044,6 +1073,99 @@ async def startup():
     asyncio.create_task(_worker_proxy_sync_loop())
     asyncio.create_task(_xray_client_audit_loop())
 
+    # Start Telegram Proxy instances for all existing TG inbounds
+    await _start_all_telegram_proxies()
+
+
+# ── Telegram Proxy Lifecycle ────────────────────────────────────────────────
+async def _start_all_telegram_proxies():
+    """Start MTProto proxy servers for all Telegram inbounds."""
+    from telegram_proxy import MTProtoProxyServer, derive_secret_from_uuid
+    async with INBOUNDS_LOCK:
+        snap = dict(INBOUNDS)
+    for iid, ib in snap.items():
+        if (ib.get("protocol") or "").lower() == "telegram":
+            await _start_telegram_proxy(iid, ib)
+
+
+async def _start_telegram_proxy(inbound_id: str, inbound: dict):
+    """Start or restart an MTProto proxy server for a Telegram inbound."""
+    from telegram_proxy import MTProtoProxyServer, derive_secret_from_uuid
+
+    # Stop existing instance if any
+    await _stop_telegram_proxy(inbound_id)
+
+    tg = inbound.get("telegram_settings") or {}
+    int_port = int(tg.get("internal_port") or inbound.get("port") or 44344)
+
+    server = MTProtoProxyServer(
+        inbound_id=inbound_id,
+        port=int_port,
+        sni=tg.get("sni", ""),
+        destination=tg.get("destination", ""),
+        server_name=tg.get("server_name", ""),
+    )
+
+    # Build secrets map: secret_hex -> {user_id, config_uuid, label}
+    secrets_map = {}
+    async with USERS_LOCK:
+        for uid, u in USERS.items():
+            iids = u.get("inbound_ids") or []
+            if inbound_id in iids:
+                config_uuid = u.get("config_uuid", uid)
+                secret = u.get("telegram_secret") or derive_secret_from_uuid(config_uuid)
+                # Store the derived secret on the user if not already set
+                if not u.get("telegram_secret"):
+                    u["telegram_secret"] = secret
+                secrets_map[secret] = {
+                    "user_id": uid,
+                    "config_uuid": config_uuid,
+                    "label": u.get("username", uid),
+                }
+
+    server.update_secrets(secrets_map)
+
+    # Traffic callback: sync back to user record
+    def on_traffic(user_id: str, nbytes: int):
+        asyncio.create_task(_sync_tg_traffic(user_id, nbytes))
+
+    server.on_traffic = on_traffic
+
+    try:
+        await server.start()
+        TG_PROXY_INSTANCES[inbound_id] = server
+        log_activity("telegram-proxy", f"Telegram Proxy started on port {int_port}", "ok")
+    except Exception as e:
+        logger.error(f"Failed to start TG proxy for {inbound_id}: {e}")
+
+
+async def _stop_telegram_proxy(inbound_id: str):
+    """Stop the MTProto proxy server for a Telegram inbound."""
+    server = TG_PROXY_INSTANCES.pop(inbound_id, None)
+    if server:
+        await server.stop()
+
+
+async def _restart_telegram_proxy(inbound_id: str):
+    """Restart the MTProto proxy for an inbound (e.g. after settings change)."""
+    async with INBOUNDS_LOCK:
+        ib = INBOUNDS.get(inbound_id)
+    if ib and (ib.get("protocol") or "").lower() == "telegram":
+        await _start_telegram_proxy(inbound_id, ib)
+
+
+async def _sync_tg_traffic(user_id: str, nbytes: int):
+    """Sync Telegram proxy traffic back to the user record."""
+    try:
+        async with USERS_LOCK:
+            u = USERS.get(user_id)
+            if u:
+                u["traffic_used_bytes"] = u.get("traffic_used_bytes", 0) + nbytes
+        asyncio.create_task(save_state())
+    except Exception:
+        pass
+
+
 # Worker proxy source sync — hourly pull from the daily GitHub list and push to
 # the deployed Cloudflare Worker (Railway is the control plane; the Worker gets
 # a fresh country → proxy map without the user doing anything).
@@ -1067,6 +1189,9 @@ async def _worker_proxy_sync_loop():
 
 @app.on_event("shutdown")
 async def shutdown():
+    # Stop all Telegram Proxy instances
+    for iid in list(TG_PROXY_INSTANCES.keys()):
+        await _stop_telegram_proxy(iid)
     await save_state()
     if http_client:
         await http_client.aclose()
@@ -1626,66 +1751,50 @@ def generate_sni_spoof_configs(user_id: str, user: dict) -> list:
 def _worker_configs(user_id: str, user: dict, inbound: dict, stored_path: str, base_remark: str, addr_ip: str = None, addr_port: str = None) -> list:
     """Build one VLESS config per selected country for a worker inbound.
 
-    address/host/sni = the deployed worker domain. Each selected country gets a
-    /route/{code} path + BPB snispoofing params, and the remark carries the
-    country flag + name so the multi-location configs are easy to tell apart.
-    If an addr override is given (scanned Cloudflare IP), only the address
-    changes; host/sni stay on the worker domain.
+    Config structure:
+      - address = addr_ip (Clean IP) OR worker domain
+      - host/sni = worker domain (always, for TLS handshake + SNI routing)
+      - path = /route/{code} (always, for country-based proxy selection)
     """
     wdomain = str(WORKER.get("worker_domain") or "").strip().lower()
     if not wdomain or wdomain in ("localhost", "0.0.0.0", "127.0.0.1"):
         return []
     wport = (inbound.get("external_port") if inbound else None) or (inbound.get("port") if inbound else None) or 443
 
-    # Sni spoofing for v2box: use user settings when enabled, fallback to inbound defaults
-    sni_spoof = bool(user.get("sni_spoof_v2box"))
-    if sni_spoof:
-        fake_sni = str(user.get("fake_sni") or inbound.get("sni") if inbound else "") or "www.hcaptcha.com"
-        spoof_ip = str(user.get("spoof_ip") or inbound.get("spoof_ip") if inbound else "") or "8.6.112.4"
-        spoof = {"active": True, "fakeSni": fake_sni, "spoofIp": spoof_ip, "targetPort": 443}
-    else:
-        fake_sni = str(inbound.get("sni") or "www.hcaptcha.com")
-        spoof_ip = str(inbound.get("spoof_ip") or "8.6.112.4")
-        spoof = {"active": True, "fakeSni": fake_sni, "spoofIp": spoof_ip, "targetPort": 0}
-    spoof_q = quote(json.dumps(spoof, separators=(",", ":")), safe="")
     cfg_uuid = user.get("config_uuid", "")
     uname = user.get("username", user_id)
+
     # Selected countries (multi-location); fall back to a single generic route.
     wcounts = user.get("proxy_countries") or ([user.get("proxy_country")] if user.get("proxy_country") else [])
     wcounts = [str(c).strip().lower() for c in wcounts if str(c).strip()]
     chosen = [(c, (WORKER.get("proxies") or {}).get(c)) for c in wcounts if (WORKER.get("proxies") or {}).get(c)]
     if not chosen:
-        chosen = [("", {"country": ""})]  # generic route-less worker config
-    addr = addr_ip or wdomain
-    port = addr_port or wport
-    out = []
+        chosen = [("", {"country": ""})]
+
+    # Address: Clean IP when provided, otherwise worker domain
+    address = addr_ip if addr_ip else wdomain
+    port = addr_port if addr_port else wport
+
+    configs = []
     for code, p in chosen:
         flag = _code_to_flag(code) if code else ""
         clabel = str(p.get("country") or (code.upper() if code else "Worker"))
         rem = quote(f"Spider-{uname} {flag} {clabel}".strip() if flag else f"Spider-{uname} Worker")
-        # The worker routes on /route/{code} alone; the upstream path (uuid) is
-        # appended by the worker itself. Never mix stored_path here (it would
-        # double up to /route/de/route/{uuid} for worker inbounds).
-        # For a scanned-IP (custom CF) config the address is the IP, so a
-        # country route no longer applies — use a generic path.
-        if addr_ip:
-            wpath = "/"
-        else:
-            wpath = f"/route/{code}" if code else (stored_path or "/")
-        params = "&".join([
-            f"snispoofing={spoof_q}",
-            "security=tls",
-            "fp=chrome",
-            "allowInsecure=0",
-            f"host={quote(wdomain)}",
-            f"path={quote(wpath, safe='')}",
-            f"sni={quote(wdomain)}",
-            "insecure=0",
-            "encryption=none",
-            "type=ws",
-        ])
-        out.append(f"vless://{cfg_uuid}@{addr}:{port}?{params}#{rem}")
-    return out
+        wpath = f"/route/{code}" if code else (stored_path or "/")
+
+        params = {
+            "encryption": "none",
+            "security": "tls",
+            "sni": wdomain,
+            "host": wdomain,
+            "fp": "chrome",
+            "type": "ws",
+            "path": quote(wpath, safe=''),
+        }
+        query = "&".join([f"{k}={v}" for k, v in params.items()])
+        configs.append(f"vless://{cfg_uuid}@{address}:{port}?{query}#{rem}")
+
+    return configs
 
 
 # ── Default link ──────────────────────────────────────────────────────────────
@@ -2392,6 +2501,8 @@ async def create_inbound(request: Request, _=Depends(require_auth)):
     domain = str(body.get("domain") or "").strip()
     external_domain = str(body.get("external_domain") or "").strip()
     sni = str(body.get("sni") or "").strip()
+    destination = str(body.get("destination") or "").strip()
+    server_name = str(body.get("server_name") or "").strip()
     port = int(body.get("port") or 443)
     external_port = int(body.get("external_port") or 443)
     fingerprint = str(body.get("fingerprint") or "chrome").strip()
@@ -2444,6 +2555,8 @@ async def create_inbound(request: Request, _=Depends(require_auth)):
             "domain": domain,
             "external_domain": external_domain,
             "sni": sni,
+            "destination": destination,
+            "server_name": server_name,
             "spoof_ip": spoof_ip,
             "external_port": external_port,
             "fingerprint": fingerprint,
@@ -2463,6 +2576,9 @@ async def create_inbound(request: Request, _=Depends(require_auth)):
     await save_state()
     log_activity("inbound", f"اینباند «{name}» با پروتکل {protocol.upper()} ساخته شد", "ok")
     asyncio.create_task(_xray_apply())  # (re)start Xray with the new inbound
+    # Start Telegram Proxy if this is a telegram inbound
+    if protocol == "telegram":
+        asyncio.create_task(_start_telegram_proxy(inbound_id, INBOUNDS[inbound_id]))
     return {"ok": True, "inbound_id": inbound_id, **INBOUNDS[inbound_id]}
 
 
@@ -2540,9 +2656,16 @@ async def update_inbound(inbound_id: str, request: Request, _=Depends(require_au
             ib["wireguard_settings"] = body["wireguard_settings"]
         if "telegram_settings" in body and isinstance(body["telegram_settings"], dict):
             ib["telegram_settings"] = body["telegram_settings"]
+        if "destination" in body:
+            ib["destination"] = str(body["destination"]).strip()
+        if "server_name" in body:
+            ib["server_name"] = str(body["server_name"]).strip()
     await save_state()
     log_activity("inbound", f"اینباند «{ib.get('name', inbound_id)}» ویرایش شد", "info")
     asyncio.create_task(_xray_apply())
+    # Restart Telegram Proxy if this is a telegram inbound
+    if (ib.get("protocol") or "").lower() == "telegram":
+        asyncio.create_task(_restart_telegram_proxy(inbound_id))
     return {"ok": True}
 
 
@@ -2605,6 +2728,9 @@ async def delete_inbound(inbound_id: str, _=Depends(require_auth)):
         if not ib:
             raise HTTPException(status_code=404, detail="inbound not found")
         name = ib.get("name", inbound_id)
+    # Stop Telegram Proxy if this was a telegram inbound
+    if (ib.get("protocol") or "").lower() == "telegram":
+        await _stop_telegram_proxy(inbound_id)
     asyncio.create_task(save_state())
     log_activity("inbound", f"اینباند «{name}» حذف شد", "err")
     return {"ok": True, "deleted": inbound_id}
@@ -2819,6 +2945,7 @@ async def create_user(request: Request, _=Depends(require_auth)):
             "inbound_ids": inbound_ids,
             "path": path,
             "transport_type": transport_type,
+            "telegram_secret": "",
         }
         _path = USERS[user_id].get("path", "").strip().lstrip("/")
 
@@ -2873,6 +3000,19 @@ async def create_user(request: Request, _=Depends(require_auth)):
         wid = next((i for i, ib in INBOUNDS.items() if (ib.get("protocol") or "").lower() == "worker"), None)
         if wid and wid in inbound_ids:
             asyncio.create_task(_worker_sync_users())
+    # Generate and persist telegram_secret if user has a Telegram inbound
+    if inbound_ids:
+        has_tg = any(
+            (INBOUNDS.get(i, {}).get("protocol") or "").lower() == "telegram"
+            for i in inbound_ids
+        )
+        if has_tg:
+            from telegram_proxy import derive_secret_from_uuid
+            async with USERS_LOCK:
+                u = USERS.get(user_id)
+                if u and not u.get("telegram_secret"):
+                    u["telegram_secret"] = derive_secret_from_uuid(config_uuid)
+            asyncio.create_task(save_state())
     host = SETTINGS.get("domain") or get_host()
     asyncio.create_task(_xray_apply())  # refresh Xray clients after user change
     return {
@@ -6227,6 +6367,108 @@ async def scanner_ping_batch(request: Request, _=Depends(require_auth)):
     results = await asyncio.gather(*(probe(t) for t in targets))
     results.sort(key=lambda r: (not r["ok"], r["latency_ms"] if r["latency_ms"] is not None else 10 ** 9))
     return {"ok": True, "count": len(results), "results": results}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SNI SCANNER endpoints — scan SNI list and find fastest for Reality
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _sni_scan_file() -> Path:
+    """Path to the SNI scan source file."""
+    p = Path(os.path.dirname(os.path.abspath(__file__))) / "data" / "sni_reality_for_scan.txt"
+    if p.is_file():
+        return p
+    return DATA_DIR / "sni_reality_for_scan.txt"
+
+
+def _sni_result_file() -> Path:
+    """Path to the SNI scan results file."""
+    p = Path(os.path.dirname(os.path.abspath(__file__))) / "data" / "sni_reality.txt"
+    if p.is_file():
+        return p
+    return DATA_DIR / "sni_reality.txt"
+
+
+def _read_sni_list() -> list:
+    """Read SNI list from the scan source file."""
+    f = _sni_scan_file()
+    if not f.is_file():
+        return []
+    out = []
+    for line in f.read_text(errors="ignore").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        # Clean markdown links: [text](url) → text
+        if line.startswith("[") and "](" in line:
+            line = line.split("](")[0].lstrip("[")
+        out.append(line)
+    return out
+
+
+def _read_sni_results() -> list:
+    """Read the fastest SNIs from the results file."""
+    f = _sni_result_file()
+    if not f.is_file():
+        return []
+    out = []
+    for line in f.read_text(errors="ignore").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split("|")
+        sni = parts[0].strip()
+        latency = int(parts[1].strip()) if len(parts) > 1 else 0
+        if sni:
+            out.append({"sni": sni, "latency_ms": latency})
+    return out
+
+
+@app.get("/api/scanner/sni-scan-list")
+async def scanner_sni_scan_list(_=Depends(require_auth)):
+    """Return the SNI list for scanning."""
+    snis = _read_sni_list()
+    return {"ok": True, "snis": snis, "count": len(snis)}
+
+
+@app.get("/api/scanner/sni-results")
+async def scanner_sni_results(_=Depends(require_auth)):
+    """Return the fastest SNIs from previous scans."""
+    results = _read_sni_results()
+    return {"ok": True, "results": results}
+
+
+@app.post("/api/scanner/sni-save-results")
+async def scanner_sni_save_results(request: Request, _=Depends(require_auth)):
+    """Save the top N fastest SNIs to the results file."""
+    body = await request.json()
+    results = body.get("results") or []
+    top_n = int(body.get("top") or 3)
+    # Sort by latency and take top N
+    results.sort(key=lambda r: r.get("latency_ms", 99999))
+    results = results[:top_n]
+    try:
+        f = _sni_result_file()
+        f.parent.mkdir(parents=True, exist_ok=True)
+        lines = ["# Fastest SNIs for Reality (auto-populated by SNI scanner)", "# Format: sni|latency_ms"]
+        for r in results:
+            sni = r.get("sni", "")
+            lat = r.get("latency_ms", 0)
+            if sni:
+                lines.append(f"{sni}|{lat}")
+        f.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    except Exception as e:
+        logger.warning(f"Could not save SNI results: {e}")
+    return {"ok": True, "saved": len(results), "results": results}
+
+
+@app.get("/api/scanner/sni-fastest")
+async def scanner_sni_fastest(_=Depends(require_auth)):
+    """Return the single fastest SNI from results (for the lightning button)."""
+    results = _read_sni_results()
+    if results:
+        return {"ok": True, "sni": results[0]["sni"], "latency_ms": results[0].get("latency_ms", 0)}
+    return {"ok": False, "sni": "", "latency_ms": 0}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
