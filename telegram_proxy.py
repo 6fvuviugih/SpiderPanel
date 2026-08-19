@@ -85,6 +85,203 @@ def is_telegram_dc(ip: str) -> bool:
     return False
 
 
+class MTProtoProxyServer:
+    """Lightweight MTProto obfuscated proxy server.
+
+    Handles the Telegram MTProto protocol handshake, extracts user secrets
+    for identification, and forwards encrypted traffic to Telegram DCs.
+    """
+
+    def __init__(self, inbound_id: str, port: int, sni: str = "",
+                 destination: str = "", server_name: str = ""):
+        self.inbound_id = inbound_id
+        self.port = port
+        self.sni = sni
+        self.destination = destination
+        self.server_name = server_name
+
+        # secrets_map: secret_hex -> {user_id, config_uuid, label, ...}
+        self._secrets_map: dict = {}
+        # user_id -> traffic bytes
+        self._traffic: dict = {}
+        # Active connections
+        self._connections: dict = {}
+        # Server socket
+        self._server: Optional[asyncio.AbstractServer] = None
+        self._running = False
+
+        # Callback for traffic reporting: user_id, bytes
+        self.on_traffic: Optional[Callable] = None
+        # Callback for connection events
+        self.on_connection: Optional[Callable] = None
+
+    def update_secrets(self, secrets_map: dict):
+        """Hot-reload user secrets without restarting the server."""
+        self._secrets_map = dict(secrets_map)
+        logger.info(f"[TG Proxy {self.inbound_id}] Secrets updated: {len(self._secrets_map)} users")
+
+    def get_traffic(self) -> dict:
+        """Return per-user traffic stats."""
+        return dict(self._traffic)
+
+    async def start(self):
+        """Start the proxy server on the configured port."""
+        if self._running:
+            return
+        try:
+            self._server = await asyncio.start_server(
+                self._handle_connection,
+                "0.0.0.0",
+                self.port,
+                reuse_address=True,
+            )
+            self._running = True
+            logger.info(f"[TG Proxy {self.inbound_id}] Started on port {self.port}")
+        except Exception as e:
+            logger.error(f"[TG Proxy {self.inbound_id}] Failed to start on port {self.port}: {e}")
+            raise
+
+    async def stop(self):
+        """Gracefully stop the proxy server."""
+        if not self._running:
+            return
+        self._running = False
+        if self._server:
+            self._server.close()
+            await self._server.wait_closed()
+        # Close all active connections
+        for conn_id, conn in list(self._connections.items()):
+            try:
+                conn["writer"].close()
+            except Exception:
+                pass
+        self._connections.clear()
+        logger.info(f"[TG Proxy {self.inbound_id}] Stopped")
+
+    async def _handle_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        """Handle a new incoming MTProto proxy connection."""
+        conn_id = secrets.token_urlsafe(6)
+        peer = writer.get_extra_info("peername")
+        client_ip = peer[0] if peer else "unknown"
+
+        try:
+            # Read the initial handshake (first 64 bytes)
+            handshake = await asyncio.wait_for(reader.read(HANDSHAKE_MAX), timeout=CONNECT_TIMEOUT)
+            if len(handshake) < 64:
+                writer.close()
+                return
+
+            # Extract the secret (bytes 8-24, after random padding)
+            secret_hex = handshake[8:24].hex()
+
+            # Look up the user by secret
+            user_info = self._secrets_map.get(secret_hex)
+            if not user_info:
+                logger.warning(f"[TG Proxy {self.inbound_id}] Unknown secret from {client_ip}")
+                writer.close()
+                return
+
+            user_id = user_info.get("user_id", "unknown")
+            config_uuid = user_info.get("config_uuid", "")
+
+            logger.info(f"[TG Proxy {self.inbound_id}] Connection from {client_ip} user={user_info.get('label', user_id)}")
+
+            # Determine the target Telegram DC
+            # The DC ID is encoded in the handshake; for default proxy, use DC2
+            dc_id = 2
+            if self.destination:
+                # Custom destination: parse host:port
+                if ":" in self.destination:
+                    target_host, target_port = self.destination.rsplit(":", 1)
+                    target_port = int(target_port)
+                else:
+                    target_host, target_port = self.destination, 443
+            else:
+                target_host, target_port = TELEGRAM_DCS.get(dc_id, TELEGRAM_DCS[2])
+
+            # Connect to the Telegram DC
+            target_reader, target_writer = await asyncio.wait_for(
+                asyncio.open_connection(target_host, target_port),
+                timeout=CONNECT_TIMEOUT,
+            )
+
+            # Forward the handshake to the target
+            target_writer.write(handshake)
+            await target_writer.drain()
+
+            # Register connection
+            self._connections[conn_id] = {
+                "user_id": user_id,
+                "client_ip": client_ip,
+                "target": f"{target_host}:{target_port}",
+                "bytes_up": 0,
+                "bytes_down": 0,
+            }
+
+            # Start bidirectional forwarding
+            done, pending = await asyncio.wait(
+                [
+                    asyncio.create_task(self._forward(reader, target_writer, conn_id, user_id, "up")),
+                    asyncio.create_task(self._forward(target_reader, writer, conn_id, user_id, "down")),
+                ],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for task in pending:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+        except asyncio.TimeoutError:
+            pass
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.debug(f"[TG Proxy {self.inbound_id}] Connection error: {e}")
+        finally:
+            # Report final traffic
+            conn = self._connections.pop(conn_id, None)
+            if conn and self.on_traffic:
+                total = conn["bytes_up"] + conn["bytes_down"]
+                if total > 0:
+                    self._traffic[user_id] = self._traffic.get(user_id, 0) + total
+                    try:
+                        self.on_traffic(user_id, total)
+                    except Exception:
+                        pass
+            # Close both sides
+            try:
+                writer.close()
+            except Exception:
+                pass
+            try:
+                target_writer.close()
+            except Exception:
+                pass
+
+    async def _forward(self, src: asyncio.StreamReader, dst: asyncio.StreamWriter,
+                       conn_id: str, user_id: str, direction: str):
+        """Forward data between src and dst, tracking bytes."""
+        try:
+            while True:
+                data = await src.read(BUF_SIZE)
+                if not data:
+                    break
+                dst.write(data)
+                if dst.transport.get_write_buffer_size() > 0:
+                    await dst.drain()
+                # Track traffic
+                conn = self._connections.get(conn_id)
+                if conn:
+                    if direction == "up":
+                        conn["bytes_up"] += len(data)
+                    else:
+                        conn["bytes_down"] += len(data)
+        except (asyncio.CancelledError, Exception):
+            pass
+
+
 def is_docker_available() -> bool:
     """Check if Docker is available on the system."""
     return shutil.which("docker") is not None

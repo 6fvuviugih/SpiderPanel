@@ -175,6 +175,31 @@ async def load_state():
                 SETTINGS.update(data["settings"])
             GROUPS.update(data.get("groups", {}))
             INBOUNDS.update(data.get("inbounds", {}))
+            # Telegram Proxy has no SNI / Destination / Server Name fields.
+            # Remove legacy values from older saved inbounds and normalize its
+            # settings to the three supported fields only.
+            _tg_migrated = False
+            for _iid, _ib in INBOUNDS.items():
+                if (_ib.get("protocol") or "").lower() != "telegram":
+                    continue
+                for _k in ("sni", "destination", "server_name"):
+                    if _ib.get(_k):
+                        _ib[_k] = ""
+                        _tg_migrated = True
+                _tg = _ib.setdefault("telegram_settings", {})
+                _clean_tg = {
+                    "internal_port": int(_tg.get("internal_port") or _ib.get("port") or 44344),
+                    "external_port": int(_tg.get("external_port") or _ib.get("external_port") or 443),
+                    "external_domain": str(_tg.get("external_domain") or _ib.get("external_domain") or "").strip(),
+                }
+                if _tg != _clean_tg:
+                    _ib["telegram_settings"] = _clean_tg
+                    _tg_migrated = True
+                _ib["port"] = _clean_tg["internal_port"]
+                _ib["external_port"] = _clean_tg["external_port"]
+                _ib["external_domain"] = _clean_tg["external_domain"]
+            if _tg_migrated:
+                asyncio.create_task(save_state())
             IP_POOL.clear()
             IP_POOL.extend(data.get("ip_pool", []))
             IP_BLACKLIST.clear()
@@ -1362,12 +1387,10 @@ async def _start_telegram_proxy(inbound_id: str, inbound: dict):
 
     int_port = int(tg.get("internal_port") or inbound.get("port") or 44344)
 
+    # Telegram Proxy does not use SNI, Destination or Server Name.
     server = MTProtoProxyServer(
         inbound_id=inbound_id,
         port=int_port,
-        sni=tg.get("sni", ""),
-        destination=tg.get("destination", ""),
-        server_name=tg.get("server_name", ""),
     )
 
     # Build secrets map: secret_hex -> {user_id, config_uuid, label}
@@ -2803,6 +2826,12 @@ async def create_inbound(request: Request, _=Depends(require_auth)):
     # deployed Cloudflare Worker domain (address/host/sni = worker_domain) and
     # optionally carries the BPB snispoofing params. The worker domain is pulled
     # automatically from the connected worker — no manual entry needed.
+    domain = str(body.get("domain") or "").strip()
+    external_domain = str(body.get("external_domain") or "").strip()
+    sni = str(body.get("sni") or "").strip()
+    destination = str(body.get("destination") or "").strip()
+    server_name = str(body.get("server_name") or "").strip()
+
     if protocol == "worker":
         wdom = _worker_safe_domain(WORKER.get("worker_domain"))
         if not wdom:
@@ -2812,18 +2841,26 @@ async def create_inbound(request: Request, _=Depends(require_auth)):
         domain = wdom
         external_domain = wdom
         sni = wdom
-        if not external_port:
-            external_port = 443
-    domain = str(body.get("domain") or "").strip()
-    external_domain = str(body.get("external_domain") or "").strip()
-    sni = str(body.get("sni") or "").strip()
-    destination = str(body.get("destination") or "").strip()
-    server_name = str(body.get("server_name") or "").strip()
 
     # For WireGuard and Telegram, port is not required (they use internal_port in settings)
     if protocol in ("wireguard", "telegram"):
-        port = 0
-        external_port = 0
+        if protocol == "telegram":
+            # Telegram Proxy has only Internal Port, External Port and External Domain.
+            # Never persist/use SNI, Destination or Server Name for Telegram.
+            sni = ""
+            destination = ""
+            server_name = ""
+            telegram_settings = {
+                "internal_port": int(telegram_settings.get("internal_port") or body.get("port") or 44344),
+                "external_port": int(telegram_settings.get("external_port") or body.get("external_port") or 443),
+                "external_domain": str(telegram_settings.get("external_domain") or external_domain or "").strip(),
+            }
+            external_domain = telegram_settings["external_domain"]
+            external_port = telegram_settings["external_port"]
+            port = telegram_settings["internal_port"]
+        else:
+            port = 0
+            external_port = 0
     else:
         port = int(body.get("port") or 443)
         external_port = int(body.get("external_port") or 443)
@@ -2990,6 +3027,19 @@ async def update_inbound(inbound_id: str, request: Request, _=Depends(require_au
             ib["destination"] = str(body["destination"]).strip()
         if "server_name" in body:
             ib["server_name"] = str(body["server_name"]).strip()
+
+        # Telegram Proxy intentionally has no SNI / Destination / Server Name.
+        if (ib.get("protocol") or "").lower() == "telegram":
+            ib["sni"] = ""
+            ib["destination"] = ""
+            ib["server_name"] = ""
+            tg = ib.setdefault("telegram_settings", {})
+            tg["internal_port"] = int(tg.get("internal_port") or ib.get("port") or 44344)
+            tg["external_port"] = int(tg.get("external_port") or ib.get("external_port") or 443)
+            tg["external_domain"] = str(tg.get("external_domain") or ib.get("external_domain") or "").strip()
+            ib["port"] = tg["internal_port"]
+            ib["external_port"] = tg["external_port"]
+            ib["external_domain"] = tg["external_domain"]
     await save_state()
     log_activity("inbound", f"اینباند «{ib.get('name', inbound_id)}» ویرایش شد", "info")
     asyncio.create_task(_xray_apply())
@@ -6022,6 +6072,26 @@ async def _worker_deploy() -> tuple:
         return 0, {"errors": [{"message": str(e)}]}
 
 
+async def _worker_enable_workers_dev() -> dict:
+    """Ensure the deployed script is published on its workers.dev hostname.
+
+    Cloudflare exposes the workers.dev route as a separate script subdomain
+    setting; a successful script upload alone does not guarantee that the URL
+    is enabled.
+    """
+    acct = str(WORKER.get("account_id") or "")
+    name = str(WORKER.get("worker_name") or "")
+    token = str(WORKER.get("token") or "")
+    email = str(WORKER.get("cf_email") or "")
+    if not acct or not name or not token:
+        return {"ok": False, "detail": "worker credentials missing"}
+    code, data = await _cf_api(
+        "POST", f"/accounts/{acct}/workers/scripts/{name}/subdomain", token,
+        {"enabled": True, "previews_enabled": False}, email=email,
+    )
+    return {"ok": code == 200 and bool(data.get("success")), "status": code, "data": data}
+
+
 async def _worker_sync_users() -> dict:
     """Push all panel users (with volume + expiry) to the worker's KV store.
 
@@ -6158,6 +6228,20 @@ async def _worker_control_update() -> dict:
             )
         if r.status_code == 200:
             return {"ok": True, "detail": "worker updated"}
+        if r.status_code == 404:
+            # A 404 here almost always means the workers.dev hostname is not
+            # serving the newly deployed script yet. Re-publish and retry once.
+            await _worker_enable_workers_dev()
+            await asyncio.sleep(0.5)
+            async with httpx.AsyncClient(timeout=20, follow_redirects=True) as retry_client:
+                rr = await retry_client.post(
+                    f"https://{domain}/api/proxies",
+                    headers={"Authorization": f"Bearer {ctrl}"},
+                    json={"locations": locations},
+                )
+            if rr.status_code == 200:
+                return {"ok": True, "detail": "worker updated after workers.dev retry"}
+            return {"ok": False, "detail": f"worker returned HTTP {rr.status_code}: {rr.text[:120]}"}
         return {"ok": False, "detail": f"worker returned HTTP {r.status_code}: {r.text[:120]}"}
     except Exception as e:
         return {"ok": False, "detail": str(e)}
@@ -6388,6 +6472,8 @@ async def worker_setup(request: Request, _=Depends(require_auth)):
             "last_error": "",
         })
     sc, sd = await _worker_deploy()
+    # Explicitly enable the workers.dev route for this script.
+    await _worker_enable_workers_dev()
     if sc not in (200, 201, 409):
         msg = (sd.get("errors") or [{}])[0].get("message", "deploy failed")
         async with WORKER_LOCK:
@@ -6415,6 +6501,7 @@ async def worker_sync(_=Depends(require_auth)):
     if not WORKER.get("connected"):
         raise HTTPException(status_code=400, detail="worker is not connected")
     sc, sd = await _worker_deploy()
+    await _worker_enable_workers_dev()
     if sc in (200, 201, 409):
         await _worker_sync_users()
         await _ensure_worker_inbound()

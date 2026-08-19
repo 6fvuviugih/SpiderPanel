@@ -545,7 +545,10 @@ input,select,button,textarea{font-family:inherit}
 .content{min-width:0;padding:20px 24px;flex:1;overflow-x:hidden;overflow-y:auto;position:relative;z-index:1;display:flex;flex-direction:column;min-height:0;}
 .tab-content{flex:1;display:flex;flex-direction:column;min-height:0;}
 .tab-content.hidden{display:none!important}
-.tab-content:not(.hidden){display:flex;flex-direction:column;}
+.tab-content:not(.hidden){display:flex;flex-direction:column;position:static!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;transform:none!important;width:100%;margin-top:0!important;align-self:stretch;}
+/* Settings / Contact / Worker must always start at the top of the content area. */
+#tab-worker,#tab-settings,#tab-contact{position:static!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;transform:none!important;width:100%!important;margin-top:0!important;align-self:stretch;}
+#tab-worker>.panel,#tab-settings>.panel,#tab-contact>.panel{margin-top:0!important;}
 
 /* LTR (English) adjustments — iOS system font */
 html[lang="en"] body, html[lang="en"] .sidebar, html[lang="en"] .panel, html[lang="en"] .btn { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, 'Segoe UI', Roboto, sans-serif; }
@@ -1474,6 +1477,14 @@ tr{animation:fadeIn .3s ease}
         <option value="telegram">Telegram Proxy</option>
       </select></div>
     </div>
+
+    <!-- Internal listen port: the port the server/Xray actually listens on. -->
+    <div class="f-g" id="ib-internal-port-wrap">
+      <label>Internal Port (پورت داخلی)</label>
+      <input type="number" id="ib-port" value="443" min="1" max="65535" dir="ltr" placeholder="443">
+      <div class="px-hint" style="font-size:10px">این پورت پورت واقعی Listen سرور است.</div>
+    </div>
+
     <div id="ib-tls-fields">
     <div class="f-g"><label data-i18n="securityType">امنیت</label><select id="ib-security" onchange="onSecurityChange()">
       <option value="tls">TLS</option>
@@ -1955,6 +1966,10 @@ function switchTab(tab, el) {
   document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.add('hidden'); });
   var target = $id('tab-' + tab);
   if (target) target.classList.remove('hidden');
+  // Every tab starts at the top; do not inherit the previous tab's scroll position.
+  var content = document.querySelector('.content');
+  if (content) content.scrollTop = 0;
+  window.scrollTo(0, 0);
   stopLiveStats();
   if (tab === 'dashboard') loadDashboard();
   if (tab === 'users') loadUsers();
@@ -2454,6 +2469,7 @@ function onProtocolChange() {
   var isTls = !isWg && !isTg;
   toggleById('ib-tls-fields', isTls);
   toggleById('ib-net-wrap', isTls);
+  toggleById('ib-internal-port-wrap', isTls);
   toggleById('ib-wg-fields', isWg);
   toggleById('ib-tg-fields', isTg);
   if (isWg) loadWGEndpoints();
@@ -2615,8 +2631,17 @@ function editInbound(iid) {
     onNetworkChange();
     openModal('mod-inbound');
   } else {
-    // WS/TLS: fully automatic — nothing to configure.
-    toast(t('inboundAuto'), 'ok');
+    // VLESS/TLS/WS: allow editing the actual inbound instead of silently refusing.
+    $id('ib-security').value = ib.security || 'tls';
+    $id('ib-network').value = ib.network || 'ws';
+    $id('ib-port').value = ib.port || '';
+    $id('ib-extdomain').value = ib.external_domain || '';
+    $id('ib-extport').value = ib.external_port || 443;
+    $id('ib-submit').textContent = t('updateInbound');
+    onProtocolChange();
+    onSecurityChange();
+    onNetworkChange();
+    openModal('mod-inbound');
   }
 }
 
@@ -2671,6 +2696,8 @@ async function submitInbound(e) {
     var network = $id('ib-network').value;
     var security = $id('ib-security').value;
     var sni = $id('ib-sni').value || 'is1-ssl.mzstatic.com';
+    var internalPort = parseInt($id('ib-port').value, 10);
+    body.port = Number.isFinite(internalPort) && internalPort > 0 ? internalPort : 443;
     body.network = network;
     body.security = security;
     body.sni = sni;
