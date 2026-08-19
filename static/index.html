@@ -1202,7 +1202,7 @@ tr{animation:fadeIn .3s ease}
             <div class="f-g" style="margin-top:10px"><label data-i18n="cfToken">Cloudflare API Token</label>
               <div style="display:flex;gap:8px">
                 <input type="password" id="wk-token" dir="ltr" style="flex:1" autocomplete="off">
-                <a class="btn btn-sm btn-g" href="https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22zone%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22dns%22%2C%22type%22%3A%22edit%22%7D%5D&accountId=*&zoneId=all&name=spider-Token" target="_blank" rel="noopener" style="text-decoration:none;white-space:nowrap">
+                <a class="btn btn-sm btn-g" href="https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_routes%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_kv_storage%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_r2%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22dns%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22zone%22%2C%22type%22%3A%22read%22%7D%5D&accountId=%2A&zoneId=all&name=spider-Token" target="_blank" rel="noopener" style="text-decoration:none;white-space:nowrap">
                   <span data-i18n="getToken">گرفتن توکن</span>
                 </a>
               </div>
@@ -2124,27 +2124,65 @@ async function submitCreateUser(e) {
 }
 
 var EU_INBOUND_PICKS = {};
+var EU_COUNTRIES = {};  // inboundId -> { worker: [codes] }
 function renderEditInboundPicker(u) {
   var wrap = $id('eu-inbound');
   if (!wrap) return;
   var cur = u.inbound_ids || (u.inbound_id ? [u.inbound_id] : []);
   EU_INBOUND_PICKS = {};
   cur.forEach(function(i) { EU_INBOUND_PICKS[i] = true; });
+  // Initialize country state from user's existing proxy_countries
+  if (!Object.keys(EU_COUNTRIES).length) {
+    var existingCountries = u.proxy_countries || [];
+    ALL_IB.forEach(function(ib) {
+      if ((ib.protocol || '').toLowerCase() === 'worker') {
+        EU_COUNTRIES[ib.inbound_id] = { worker: existingCountries.slice() };
+      }
+    });
+  }
   var html = '';
   ALL_IB.forEach(function(ib) {
     var id = ib.inbound_id;
     var selected = EU_INBOUND_PICKS[id] === true;
     var proto = (ib.protocol || 'vless').toUpperCase();
+    var type = (ib.protocol || 'vless').toLowerCase();
     html += '<div class="ib-pick' + (selected ? ' selected' : '') + '" data-id="' + esc(id) + '" onclick="euToggleIbPick(this)">' +
-      '<div class="ib-pick-ic"><span class="material-symbols-outlined">' + ((ib.protocol || '').toLowerCase() === 'worker' ? 'bolt' : 'cloud') + '</span></div>' +
+      '<div class="ib-pick-ic"><span class="material-symbols-outlined">' + (type === 'worker' ? 'bolt' : type === 'wireguard' ? 'vpn_key' : 'cloud') + '</span></div>' +
       '<div class="ib-pick-info">' +
         '<div class="ib-pick-name">' + esc(ib.name) + '</div>' +
         '<div class="ib-pick-meta">' + esc(proto + ' · ' + (ib.network || 'ws') + ' · ' + (ib.security || 'tls')) + '</div>' +
       '</div>' +
       '<div class="ib-pick-check"><span class="material-symbols-outlined">check</span></div>' +
     '</div>';
+    if (selected && type === 'worker') {
+      var sel = EU_COUNTRIES[id] || {};
+      var chipHtml = '';
+      (window.cuWorkerProxies ? cuWorkerProxies() : []).forEach(function(p) {
+        var flag = window.cuCodeToFlag ? cuCodeToFlag(p.code) : '';
+        var checked = (sel.worker || []).indexOf(p.code) !== -1 ? ' selected' : '';
+        chipHtml += '<span class="country-tick' + checked + '" data-code="' + esc(p.code) + '" onclick="euPickWorkerCountry(\'' + esc(id) + '\',this)">' +
+          '<span class="ck material-symbols-outlined">check</span>' + flag + ' ' + esc(p.country || p.code) + '</span>';
+      });
+      html += '<div style="flex-basis:100%;padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);margin-top:4px">';
+      html += '<div style="font-size:11px;color:var(--txt2);margin-bottom:6px">' + (t('workerCountries') || 'Worker Countries') + '</div>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:6px;direction:ltr;text-align:left">' + chipHtml + '</div>';
+      html += '</div>';
+    }
   });
   wrap.innerHTML = html || '<span style="font-size:11px;color:var(--txt2)">' + t('noInboundOpt') + '</span>';
+}
+
+function euPickWorkerCountry(ibId, el) {
+  el.classList.toggle('selected');
+  var arr = EU_COUNTRIES[ibId] = EU_COUNTRIES[ibId] || {};
+  arr.worker = arr.worker || [];
+  var code = el.getAttribute('data-code');
+  var idx = arr.worker.indexOf(code);
+  if (el.classList.contains('selected')) {
+    if (idx === -1) arr.worker.push(code);
+  } else {
+    if (idx !== -1) arr.worker.splice(idx, 1);
+  }
 }
 function euToggleIbPick(el) {
   var id = el.getAttribute('data-id');
@@ -2158,6 +2196,7 @@ function selectedEditInboundIds() {
 function editUser(uid) {
   var u = ALL_USERS.find(function(x) { return x.user_id === uid; });
   if (!u) return;
+  EU_COUNTRIES = {};
   $id('eu-id').value = uid;
   $id('eu-name').value = u.username || '';
   $id('eu-vol').value = (u.traffic_limit_bytes ? (u.traffic_limit_bytes / 1073741824).toFixed(0) : '0');
@@ -2178,6 +2217,14 @@ async function submitEditUser(e) {
     var saved = localStorage.getItem('spider-spoof-settings');
     if (saved) { var s = JSON.parse(saved); fakeSni = s.fakeSni || ''; spoofIp = s.spoofIp || ''; }
   } catch(e) {}
+  // Collect all selected worker countries from EU_COUNTRIES
+  var allEuCountries = [];
+  Object.keys(EU_COUNTRIES).forEach(function(ibId) {
+    var c = EU_COUNTRIES[ibId] || {};
+    (c.worker || []).forEach(function(code) {
+      if (allEuCountries.indexOf(code) === -1) allEuCountries.push(code);
+    });
+  });
   try {
     await api('/api/users/' + uid, {method: 'PATCH', body: {
       username: $id('eu-name').value,
@@ -2188,7 +2235,9 @@ async function submitEditUser(e) {
       reset_traffic: $id('eu-reset') ? $id('eu-reset').checked : false,
       fake_sni: fakeSni,
       spoof_ip: spoofIp,
-      inbound_ids: selectedEditInboundIds()
+      inbound_ids: selectedEditInboundIds(),
+      proxy_countries: allEuCountries,
+      proxy_country: allEuCountries[0] || ''
     }});
     toast(t('toast.userUpdated'), 'ok');
     closeModal('mod-edit-user');
@@ -3676,6 +3725,7 @@ function cuToggleIpSwitch(ibId, el) {
 }
 
 function cuPickWorkerCountries(ibId, el) {
+  el.classList.toggle('selected');
   var arr = cuInboundState.countries[ibId] = cuInboundState.countries[ibId] || {};
   arr.worker = arr.worker || [];
   var code = el.getAttribute('data-code');
@@ -3685,7 +3735,6 @@ function cuPickWorkerCountries(ibId, el) {
   } else {
     if (idx !== -1) arr.worker.splice(idx, 1);
   }
-  // No selected countries → no worker configs generated for this inbound.
 }
 
 function cuCustomStates() {

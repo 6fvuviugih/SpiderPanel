@@ -5342,7 +5342,7 @@ async def scan_railway_ips(_=Depends(require_auth)):
 # ══════════════════════════════════════════════════════════════════════════════
 
 CF_API = "https://api.cloudflare.com/client/v4"
-CF_TOKEN_LINK = "https://dash.cloudflare.com/profile/api-tokens"
+CF_TOKEN_LINK = "https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_routes%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_kv_storage%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_r2%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22dns%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22zone%22%2C%22type%22%3A%22read%22%7D%5D&accountId=%2A&zoneId=all&name=spider-Token"
 
 # Worker script deployed to the user's Cloudflare account lives in the project
 # at worker/_worker.js (NOT under /static, so it is never served to the web).
