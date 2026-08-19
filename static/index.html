@@ -880,64 +880,42 @@ tr{animation:fadeIn .3s ease}
 
 </style>
 <style>
-
-/* ===== Worker & Contact layout — match the other dashboard panels ===== */
-.content {
-  display: block !important;
-  padding: 20px 24px !important;
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
-}
+/* === Worker / Contact Me layout fix === */
 .tab-content {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+#tab-worker, #tab-contact {
   display: block;
   width: 100%;
   min-width: 0;
   margin: 0;
   padding: 0;
 }
-.tab-content.hidden { display: none !important; }
-#tab-worker, #tab-contact {
+#tab-worker.hidden, #tab-contact.hidden { display: none !important; }
+#tab-worker > .panel, #tab-contact > .panel {
   width: 100%;
+  box-sizing: border-box;
   margin: 0;
-  padding: 0;
 }
-#tab-worker > .panel,
-#tab-contact > .panel {
-  display: block;
-  width: 100%;
-  max-width: none;
-  box-sizing: border-box;
-  margin: 0 0 16px 0;
-}
-#tab-contact > .contact-panel {
-  width: 100%;
-  min-height: 0;
-  align-items: stretch;
-  text-align: center;
-}
-#tab-contact .panel-h,
-#tab-contact .contact-sub,
-#tab-contact .contact-bubbles {
+#tab-contact .contact-panel {
   width: 100%;
   box-sizing: border-box;
+  margin: 0;
+  align-self: stretch;
 }
-#tab-contact .contact-bubbles {
-  justify-content: center;
-}
-/* Keep sidebar items at the top; do not let flex:1 create a large vertical gap. */
+/* Keep sidebar items at the top; do not stretch them through the sidebar. */
 .sb-nav {
   flex: 0 1 auto;
   justify-content: flex-start;
-  align-content: flex-start;
   gap: 2px;
-  min-height: 0;
 }
-@media (max-width:700px) {
-  .content { padding: 12px !important; }
-  #tab-worker > .panel,
-  #tab-contact > .panel { width: 100%; }
+@media (max-width: 700px) {
+  .content { padding: 14px; }
+  #tab-worker > .panel, #tab-contact > .panel { width: 100%; }
 }
-
 </style>
 </head>
 <body>
@@ -2010,6 +1988,8 @@ function switchTab(tab, el) {
   document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.add('hidden'); });
   var target = $id('tab-' + tab);
   if (target) target.classList.remove('hidden');
+  var contentArea = document.querySelector('.content');
+  if (contentArea) contentArea.scrollTop = 0;
   stopLiveStats();
   if (tab === 'dashboard') loadDashboard();
   if (tab === 'users') loadUsers();
@@ -2815,7 +2795,7 @@ document.addEventListener('DOMContentLoaded', wireModalCloseButtons);
 wireModalCloseButtons();
 
 // ─── DOM Helper ───
-const $id = (id) => document.getElementById(id);
+// $id is defined once at the top of this script.
 
 // ─── Helpers ───
 function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
