@@ -1450,10 +1450,17 @@ def generate_user_config(user_id: str, user: dict, inbound_id: str = None, addr:
             xmod = xs.get("mode", "auto")
             xsc = xs.get("scMaxEachPostBytes", "1000000")
             extra = quote('{{"xPaddingBytes":"{}","mode":"{}","scMaxEachPostBytes":"{}"}}'.format(xpb, xmod, xsc), safe='')
+            # Use dest and server_names from reality_settings if provided
+            rs_sni = rs.get("sni") or sni
+            rs_dest = rs.get("dest") or (rs_sni + ":443")
+            rs_server_names = rs.get("server_names") or [rs_sni]
+            server_names_q = quote(",".join(rs_server_names), safe="")
             params = (f"encryption=none&security=reality"
                       f"&sni={quote(sni)}&fp={fp}"
                       f"&pbk={pbk}&sid={sid}&spx={spx}"
-                      f"&type=xhttp&path={rpath}&mode={xmod}&extra={extra}")
+                      f"&type=xhttp&path={rpath}&mode={xmod}&extra={extra}"
+                      f"&dest={quote(rs_dest)}"
+                      f"&serverName={server_names_q}")
         return f"vless://{config_uuid}@{host}:{port}?{params}#{remark}"
 
     # ── TLS (WS default / XHTTP selectable) — served by the FastAPI relay ──
@@ -1505,32 +1512,35 @@ def generate_user_config(user_id: str, user: dict, inbound_id: str = None, addr:
     return f"vless://{config_uuid}@{host}:{port}?{params}#{remark}"
 
 
-def generate_custom_ip_configs(user_id: str, user: dict) -> list:
-    """Build up to 10 extra configs whose address comes from a scanned IP file.
+def generate_custom_ip_configs(user_id: str, user: dict) -> dict:
+    """Build extra configs from scanned IPs — ONLY for VLESS/WS/Worker inbounds.
 
-    The scanned IPs (cf | railway) become the connect address; the config still
-    routes to the real panel domain for TLS/WS. Each IP is randomly assigned to
-    one of the user's non-Reality inbounds (Reality inbounds are never used,
-    because their address/handshake cannot be swapped for a plain scanned IP).
+    WireGuard and Telegram inbounds are SKIPPED because:
+    - WireGuard requires pre-shared keys and specific endpoint routing
+    - Telegram proxy works on its own dedicated port, not on CF/Railway IPs
 
-    Per-inbound rules (from the create-user modal's custom_ip_inbounds):
-    - worker inbound → scanned Cloudflare IPs (host/sni stay on the worker domain)
-    - tls (ws/xhttp) inbound → scanned Railway IPs (host/sni stay on the panel domain)
-    - reality inbound → none (Reality can't have its address swapped)
+    Per-inbound rules:
+    - worker inbound → scanned Cloudflare IPs (host/sni stay on worker domain)
+    - tls (ws/xhttp) inbound → scanned Railway IPs (host/sni stay on panel domain)
+    - wireguard/telegram → SKIPPED (not compatible with scanned IPs)
+    - reality → SKIPPED (can't swap address)
 
-    Returns {"railway": [...], "cf": [...]} so the sub page can render the
-    Railway group then the Cloudflare group.
+    Returns {"railway": [...], "cf": [...]}
     """
     cii = user.get("custom_ip_inbounds") or {}
     cf_ids = [str(x) for x in (cii.get("cf") or [])]
     rw_ids = [str(x) for x in (cii.get("railway") or [])]
     out = {"railway": [], "cf": []}
-    # Cloudflare scanned IPs go to the selected worker inbounds.
+
+    # Cloudflare scanned IPs → worker inbounds only
     cf_ips = _read_scanned_ips("cf")
     if cf_ips:
         for iid_ in cf_ids:
             ib = INBOUNDS.get(iid_)
             if not ib:
+                continue
+            # Skip wireguard and telegram — not compatible with scanned IPs
+            if (ib.get("protocol") or "").lower() in ("wireguard", "telegram"):
                 continue
             for i, ip in enumerate(cf_ips[:10], 1):
                 try:
@@ -1540,11 +1550,17 @@ def generate_custom_ip_configs(user_id: str, user: dict) -> list:
                     continue
                 if cfg:
                     out["cf"].append(cfg)
-    # Railway scanned IPs go to the selected tls inbounds.
+
+    # Railway scanned IPs → TLS inbounds only
     rw_ips = _read_scanned_ips("railway")
     if rw_ips:
         for iid_ in rw_ids:
             ib = INBOUNDS.get(iid_)
+            if not ib:
+                continue
+            # Skip wireguard and telegram — not compatible with scanned IPs
+            if (ib.get("protocol") or "").lower() in ("wireguard", "telegram"):
+                continue
             if not ib:
                 continue
             for i, ip in enumerate(rw_ips[:10], 1):
@@ -2539,12 +2555,15 @@ async def create_inbound(request: Request, _=Depends(require_auth)):
         if not reality_settings.get("short_id"):
             reality_settings["short_id"] = fresh["short_id"]
         reality_settings.setdefault("spiderx", "/")
-        reality_settings.setdefault("dest", "is1-ssl.mzstatic.com:443")
         reality_settings.setdefault("mldsa65_seed", fresh["mldsa65_seed"])
         reality_settings.setdefault("mldsa65_verify", fresh["mldsa65_verify"])
-        # Fixed SNI target per request
-        reality_settings["sni"] = "is1-ssl.mzstatic.com"
-        sni = "is1-ssl.mzstatic.com"
+        # SNI from frontend is used as dest, server_names, and sni
+        if not reality_settings.get("dest"):
+            reality_settings["dest"] = (sni or "is1-ssl.mzstatic.com") + ":443"
+        if not reality_settings.get("server_names"):
+            reality_settings["server_names"] = [sni or "is1-ssl.mzstatic.com"]
+        if not reality_settings.get("sni"):
+            reality_settings["sni"] = sni or "is1-ssl.mzstatic.com"
         security = "reality"
         if not external_domain:
             external_domain = domain or CONFIG.get("host", "")

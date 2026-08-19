@@ -1448,23 +1448,21 @@ tr{animation:fadeIn .3s ease}
 
     <!-- Shared external address (used for both TLS and Reality) -->
     <div class="f-g"><label data-i18n="extDomain">دامنه خارجی (در آدرس کانفیگ)</label><input type="text" id="ib-extdomain" dir="ltr" data-i18n-placeholder="extDomainPlace" placeholder="مثال: tokaido.proxy.rlwy.net"></div>
-    <div class="f-r">
-      <div class="f-g"><label data-i18n="extPortCfg">پورت خارجی (در آدرس کانفیگ)</label><input type="number" id="ib-extport" value="443" dir="ltr" placeholder="443"></div>
-      <div class="f-g"><label>SNI</label>
-        <div style="display:flex;gap:6px;align-items:flex-end">
-          <input type="text" id="ib-sni" value="is1-ssl.mzstatic.com" dir="ltr" placeholder="SNI for Reality" style="flex:1">
-          <button type="button" class="btn btn-sm btn-b" onclick="snPickFastest()" title="سریع‌ترین SNI از sni_reality.txt" style="border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-          </button>
-        </div>
-      </div>
-    </div>
+    <div class="f-g"><label data-i18n="extPortCfg">پورت خارجی (در آدرس کانفیگ)</label><input type="number" id="ib-extport" value="443" dir="ltr" placeholder="443"></div>
     </div>
 
     <!-- Reality-only fields -->
     <div id="ib-reality-fields" class="hidden">
       <div class="divider"></div>
       <div style="font-size:11px;color:var(--neon);font-weight:700;margin-bottom:8px" data-i18n="realitySettings">تنظیمات Reality</div>
+      <div class="f-g"><label>SNI (Server Name / Destination)</label>
+        <div style="display:flex;gap:6px;align-items:flex-end">
+          <input type="text" id="ib-sni" value="is1-ssl.mzstatic.com" dir="ltr" placeholder="مثلاً www.google.com" style="flex:1">
+          <button type="button" class="btn btn-sm btn-b" onclick="snPickFastest()" title="سریع‌ترین SNI از sni_reality.txt" style="border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          </button>
+        </div>
+      </div>
       <div class="f-r">
         <div class="f-g"><label>Private Key (x25519)</label><input type="text" id="ib-privkey" dir="ltr" data-i18n-placeholder="autoGen" placeholder="تولید خودکار"></div>
         <div class="f-g"><label>Public Key</label><input type="text" id="ib-pubkey" dir="ltr" data-i18n-placeholder="autoGen" placeholder="تولید خودکار" readonly></div>
@@ -2643,11 +2641,16 @@ async function submitInbound(e) {
     body.external_domain = $id('ib-extdomain').value || '';
 
     if (security === 'reality') {
+      // For Reality: SNI is used as destination, server name, and SNI
+      var sniVal = $id('ib-sni').value || 'is1-ssl.mzstatic.com';
       body.reality_settings = {
         private_key: $id('ib-privkey').value || '',
         public_key: $id('ib-pubkey').value || '',
         short_ids: $id('ib-shortids').value || '',
-        spiderx: $id('ib-spiderx').value || '/'
+        spiderx: $id('ib-spiderx').value || '/',
+        dest: sniVal + ':443',
+        server_names: [sniVal],
+        sni: sniVal
       };
     }
     if (network === 'ws') {

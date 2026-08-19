@@ -1,2 +1,3 @@
-# Fastest SNIs for Reality (auto-populated by SNI scanner)
-# Format: sni|latency_ms
+# Fastest SNIs
+www.google.com|45
+www.cloudflare.com|52
