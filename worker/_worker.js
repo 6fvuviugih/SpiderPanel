@@ -15,6 +15,7 @@
 
 const PANEL_TOKEN = __PANEL_TOKEN__;
 const PANEL_DOMAIN = __PANEL_DOMAIN__;
+const WORKER_DOMAIN = __WORKER_DOMAIN__;
 const BUF = 64 * 1024;
 
 // ── Utility ─────────────────────────────────────────────────────────────────
@@ -343,7 +344,20 @@ export default {
       return json(info);
     }
 
-    // ── Admin API (Bearer PANEL_TOKEN) ──
+    
+function workerConfigsForUser(u) {
+  const out = [];
+  const countries = Array.isArray(u.countries) && u.countries.length ? u.countries : [''];
+  for (const code of countries) {
+    const path = code ? `/route/${encodeURIComponent(String(code).toLowerCase())}` : `/${u.uuid}`;
+    const remark = `${u.remark || 'user'}${code ? ' ' + String(code).toUpperCase() : ''}`;
+    const q = `encryption=none&security=tls&sni=${encodeURIComponent(location.hostname)}&host=${encodeURIComponent(location.hostname)}&fp=chrome&type=ws&path=${encodeURIComponent(path)}`;
+    out.push(`vless://${u.uuid}@${WORKER_DOMAIN}:443?${q}#${encodeURIComponent(remark)}`);
+  }
+  return out;
+}
+
+// ── Admin API (Bearer PANEL_TOKEN) ──
     if (path.startsWith('/api/')) {
       if (!authorized(request)) return json({ error: 'Forbidden' }, 403);
 
@@ -371,8 +385,10 @@ export default {
           used_bytes: Number(body.used_bytes) || 0,
           proxy_ip: String(body.proxy_ip || ''),
           concurrent_connections: Number(body.concurrent_connections) || 0,
+          countries: Array.isArray(body.countries) ? body.countries.map(x => String(x).toLowerCase()).filter(Boolean) : [],
           created: Date.now(),
         };
+        u.configs = workerConfigsForUser(u);
         await setUser(env, uuid, u);
         return json({ ok: true, user: u });
       }

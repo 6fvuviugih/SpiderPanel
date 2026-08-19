@@ -1,17 +1,15 @@
-# telegram_proxy.py — Telegram MTProto Proxy Server for Spider Panel
-# ════════════════════════════════════════════════════════════════════════════════
-# Supports both built-in Python MTProto proxy and official telegrammessenger/proxy Docker image.
-# Each inbound gets its own proxy instance (Python or Docker) on its internal port.
+# telegram_proxy.py — Lightweight MTProto Proxy Server for Spider Panel
+# ══════════════════════════════════════════════════════════════════════════════
+# Implements the Telegram MTProto obfuscated proxy protocol using asyncio.
+# Each inbound gets its own MTProtoProxyServer instance on its internal port.
 # Per-user secrets identify users; traffic is forwarded to Telegram servers.
-# ═══════════════════════════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════════════════════
 
 import asyncio
 import hashlib
 import logging
 import secrets
 import struct
-import shutil
-import subprocess
 from typing import Callable, Optional
 
 logger = logging.getLogger("Spider-TelegramProxy")
@@ -280,115 +278,3 @@ class MTProtoProxyServer:
                         conn["bytes_down"] += len(data)
         except (asyncio.CancelledError, Exception):
             pass
-
-
-def is_docker_available() -> bool:
-    """Check if Docker is available on the system."""
-    return shutil.which("docker") is not None
-
-
-def get_docker_image() -> str:
-    """Get the Docker image to use for Telegram proxy."""
-    return "telegrammessenger/proxy:latest"
-
-
-async def run_docker_telegram_proxy(
-    container_name: str,
-    port: int,
-    secret: str,
-    domain: str = "",
-    proxy_tag: str = ""
-) -> bool:
-    """
-    Start a Telegram proxy using the official telegrammessenger/proxy Docker image.
-
-    Args:
-        container_name: Name for the Docker container
-        port: Port to expose on host (internal port)
-        secret: 32-char hex secret for MTProto
-        domain: Optional domain for the proxy (for advertising)
-        proxy_tag: Optional proxy tag from @MTProxybot (32 hex chars)
-
-    Returns:
-        True if container started successfully, False otherwise
-    """
-    if not is_docker_available():
-        logger.warning("Docker not available, cannot start Docker-based Telegram proxy")
-        return False
-
-    # Check if container already exists
-    try:
-        result = subprocess.run(
-            ["docker", "ps", "-a", "--filter", f"name=^{container_name}$", "--format", "{{.Names}}"],
-            capture_output=True, text=True, timeout=10
-        )
-        if container_name in result.stdout:
-            # Container exists, remove it first
-            subprocess.run(["docker", "rm", "-f", container_name], capture_output=True, timeout=10)
-    except Exception as e:
-        logger.warning(f"Failed to check/remove existing container: {e}")
-
-    # Build docker run command
-    cmd = [
-        "docker", "run", "-d",
-        "--name", container_name,
-        "--restart", "unless-stopped",
-        "-p", f"{port}:443",  # Map internal port 443 to host port
-        "-e", f"SECRET={secret}",
-    ]
-
-    if domain:
-        cmd.extend(["-e", f"DOMAIN={domain}"])
-
-    # Add proxy tag if provided (for MTProxybot)
-    # Note: The official image uses PROXY_TAG env var
-    # We'll add it if provided
-    if proxy_tag:
-        cmd.extend(["-e", f"PROXY_TAG={proxy_tag}"])
-
-    cmd.append("telegrammessenger/proxy:latest")
-
-    try:
-        logger.info(f"Starting Docker Telegram proxy: {container_name} on port {port}")
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        if result.returncode != 0:
-            logger.error(f"Failed to start Docker container: {result.stderr}")
-            return False
-        logger.info(f"Docker Telegram proxy started: {container_name}")
-        return True
-    except subprocess.TimeoutExpired:
-        logger.error("Docker run timed out")
-        return False
-    except Exception as e:
-        logger.error(f"Failed to start Docker Telegram proxy: {e}")
-        return False
-
-
-async def stop_docker_telegram_proxy(container_name: str) -> bool:
-    """Stop and remove a Docker Telegram proxy container."""
-    if not is_docker_available():
-        return False
-
-    try:
-        subprocess.run(["docker", "stop", container_name], capture_output=True, timeout=10)
-        subprocess.run(["docker", "rm", container_name], capture_output=True, timeout=10)
-        logger.info(f"Docker Telegram proxy stopped: {container_name}")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to stop Docker container: {e}")
-        return False
-
-
-async def check_docker_proxy_running(container_name: str) -> bool:
-    """Check if a Docker Telegram proxy container is running."""
-    if not is_docker_available():
-        return False
-
-    try:
-        result = subprocess.run(
-            ["docker", "ps", "--filter", f"name=^{container_name}$", "--format", "{{.Status}}"],
-            capture_output=True, text=True, timeout=10
-        )
-        return "Up" in result.stdout
-    except Exception:
-        return False

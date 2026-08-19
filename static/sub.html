@@ -614,7 +614,7 @@
       '<div class="absolute ltr:left-0 rtl:right-0 top-0 bottom-0 w-1 bg-[#00ffff] opacity-0 group-hover:opacity-100 transition-opacity neon-border"></div>' +
       '<div class="flex flex-col gap-1 ltr:pl-2 rtl:pr-2 min-w-0 flex-1">' +
         '<div class="flex items-center gap-2">' +
-          '<span class="font-code-label text-code-label text-on-surface font-bold ltr:text-left rtl:text-right" dir="ltr">' + esc((dd.protocol || 'vless').toUpperCase()) + ' #' + (i + 1) + '</span>' +
+          '<span class="font-code-label text-code-label text-on-surface font-bold ltr:text-left rtl:text-right" dir="ltr">' + esc((c.split('://')[0] || dd.protocol || 'vless').toUpperCase()) + ' #' + (i + 1) + '</span>' +
           '<span class="px-2 py-0.5 rounded-full bg-black/10 dark:bg-white/10 font-code-label text-[10px] text-on-surface-variant">' + esc(ctype) + '</span>' +
         '</div>' +
         '<span class="cfg-text text-on-surface-variant truncate max-w-[280px] md:max-w-[480px] ltr:text-left rtl:text-right" dir="ltr" title="' + esc(c) + '">' + esc(displayInfo) + '</span>' +
@@ -706,6 +706,9 @@
       window.__cfgs = (Array.isArray(d.configs) && d.configs.length)
         ? d.configs.filter(function (c) { return c && c.indexOf('%F0%9F%93%8A') === -1; })
         : (window.__cfg ? [window.__cfg] : []);
+      if (Array.isArray(d.worker_configs) && d.worker_configs.length) {
+        window.__cfgs = d.worker_configs.slice();
+      }
       if (!window.__cfgs.length && window.__cfg) window.__cfgs = [window.__cfg];
       // Custom scanned-IP configs are appended to configs by the backend; keep
       // them separate so they render BELOW the main configs in the sub page.

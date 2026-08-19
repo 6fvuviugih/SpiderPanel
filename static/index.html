@@ -512,18 +512,17 @@ input,select,button,textarea{font-family:inherit}
   border-left:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;
   position:fixed;top:0;bottom:0;right:0;z-index:100;transition:transform .35s cubic-bezier(.4,0,.2,1);
   overflow-y:auto;overflow-x:hidden;box-shadow:0 8px 32px rgba(0,0,0,.6);
-  height:100vh;
 }
 .sb-brand{padding:22px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)}
 .sb-brand img{width:42px;height:42px;mix-blend-mode:screen}
 .sb-brand-t{font-size:17px;font-weight:800;letter-spacing:3px;background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .sb-brand-t span{color:inherit;-webkit-text-fill-color:inherit}
 .sb-brand-s{font-size:10px;color:var(--txt2);letter-spacing:5px;margin-top:2px}
-.sb-nav{flex:1;padding:10px;overflow-y:auto;display:flex;flex-direction:column;justify-content:flex-start;gap:2px;min-height:0}
+.sb-nav{flex:1;padding:10px;overflow-y:auto}
 .nav-item{
   padding:11px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;
   font-size:13px;font-weight:500;color:var(--txt2);transition:all .2s;
-  border-radius:12px;margin:0;position:relative;flex-shrink:0;
+  border-radius:12px;margin:2px 0;position:relative;
 }
 .nav-item:hover{color:var(--txt);background:rgba(43,127,255,.06)}
 .nav-item.active{color:var(--nav-color);background:var(--nav-bg);border:1px solid var(--border-glow)}
@@ -787,16 +786,9 @@ tr{animation:fadeIn .3s ease}
 .theme-dot.red{background:#ff1744}.theme-dot.green{background:#00ff41}.theme-dot.blue{background:#448aff}
 
 /* Contact Me bubbles */
-.contact-panel{text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px;justify-content:flex-start;min-height:auto;width:100%;height:100%}
+.contact-panel{text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}
 .contact-sub{font-size:12px;color:var(--txt2);margin-bottom:18px}
-.contact-bubbles{display:flex;gap:28px;justify-content:center;align-items:center;flex-wrap:wrap;padding:16px 0 8px;width:100%;align-self:flex-start}
-.contact-bubble{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
-  width:150px;height:150px;border-radius:50%;
-  background:#0a0a0d;
-  border:1.5px solid var(--border);color:var(--txt);text-decoration:none;
-  box-shadow:var(--shadow-md);transition:all .3s ease;position:relative;overflow:hidden;flex-shrink:0
-}
+.contact-bubbles{display:flex;gap:28px;justify-content:center;align-items:center;flex-wrap:wrap;padding:16px 0 8px}
 .contact-bubble{
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
   width:150px;height:150px;border-radius:50%;
@@ -848,31 +840,6 @@ tr{animation:fadeIn .3s ease}
   .px-tools .btn{flex:1 1 auto}
   .f-r{flex-wrap:wrap}
   .f-r > .f-g{min-width:100%}
-
-  /* Mobile fix for SNI Scanner inputs - prevent squishing */
-  .scn-cfg div[style*="display:flex"] {
-    flex-direction: column !important;
-    gap: 10px !important;
-  }
-
-  #scn-sni-input {
-    width: 100% !important;
-    min-height: 48px; /* Larger touch target */
-    font-size: 16px !important;
-  }
-
-  .scn-cfg .btn {
-    width: 100% !important;
-    min-height: 48px;
-  }
-
-  /* Mobile fix for inbound modal fields */
-  .modal-c .f-r {
-    flex-direction: column !important;
-  }
-  .modal-c .f-g {
-    min-width: 100% !important;
-  }
 }
 /* Users table on small screens: let each row stack so nothing is cut off */
 @media(max-width:640px){
@@ -1017,14 +984,10 @@ tr{animation:fadeIn .3s ease}
       <!-- INBOUNDS TAB -->
       <div class="tab-content hidden" id="tab-inbounds">
         <div class="panel">
-          <div class="panel-h" style="justify-content:space-between">
+          <div class="panel-h">
             <span class="glow" data-i18n="tab.inbounds">مدیریت اینباندها</span>
-            <button class="btn btn-p" onclick="openCreateInbound()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              <span data-i18n="newInbound">اینباند جدید</span>
-            </button>
           </div>
-          <div class="px-hint">اینباند جدید ایجاد کنید یا اینباندهای موجود را ویرایش کنید. WireGuard، Telegram Proxy، VLESS+WS/TLS/Reality پشتیبانی می‌شوند.</div>
+          <div class="px-hint" data-i18n="inboundFixedHint">فقط اینباندهای پیش‌فرض پنل استفاده می‌شوند. WS/TLS به‌صورت خودکار با دامنه اصلی پنل آماده است؛ Reality را با دامنه و پورت خودتان تکمیل کنید (کلید pbk به‌صورت خودکار ساخته می‌شود).</div>
           <div id="inbounds-list"><div class="empty" data-i18n="loading">در حال بارگذاری...</div></div>
         </div>
 
@@ -1041,7 +1004,6 @@ tr{animation:fadeIn .3s ease}
             <button class="scn-tab" id="scn-tab-railway" onclick="scnSwitch('railway',this)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M7 19h10M4 19H3v-3l2-5h11l3 5v3h-1M5 11l1-7h9l1 7"/></svg> Railway</button>
             <button class="scn-tab" id="scn-tab-tcp" onclick="scnSwitch('tcp',this)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 7a3 3 0 0 1-3 3 3 3 0 0 1 0 6 3 3 0 0 1-3-3"/><path d="M14 17a3 3 0 0 1 3-3 3 3 0 0 1 0-6 3 3 0 0 1 3 3"/></svg> TCP</button>
             <button class="scn-tab" id="scn-tab-spoof" onclick="scnSwitch('spoof',this)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 6v6M12 14v2"/></svg> Spoof</button>
-            <button class="scn-tab" id="scn-tab-sni" onclick="scnSwitch('sni',this)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg> SNI</button>
           </div>
 
           <!-- CLOUDFLARE PANE -->
@@ -1049,8 +1011,6 @@ tr{animation:fadeIn .3s ease}
             <div class="scn-cfg">
               <div class="f-g"><label data-i18n="ipCount">تعداد IP</label><input type="number" id="scn-cf-count" value="30" min="1" max="100"></div>
               <div class="f-g"><label data-i18n="targetPort">پورت هدف</label><select id="scn-cf-port"><option value="443">443</option><option value="2053">2053</option><option value="8443">8443</option><option value="2083">2083</option></select></div>
-              <div class="f-g"><label>Tween (ms)</label><input type="number" id="scn-cf-delay" value="200" min="50" max="2000" step="50"></div>
-              <div class="f-g"><label>Timeout (s)</label><input type="number" id="scn-cf-timeout" value="1.0" min="0.3" max="5" step="0.1"></div>
               <button class="btn btn-p" onclick="scnRunCF()"><span data-i18n="startScan">شروع اسکن</span></button>
               <button class="btn btn-g" onclick="scnStop()"><span data-i18n="stop">توقف</span></button>
             </div>
@@ -1074,8 +1034,6 @@ tr{animation:fadeIn .3s ease}
             <div class="scn-cfg">
               <div class="f-g"><label data-i18n="ipCount">تعداد IP</label><input type="number" id="scn-rw-count" value="30" min="1" max="100"></div>
               <div class="f-g"><label data-i18n="targetPort">پورت هدف</label><select id="scn-rw-port"><option value="443">443</option><option value="8080">8080</option><option value="80">80</option></select></div>
-              <div class="f-g"><label>Tween (ms)</label><input type="number" id="scn-rw-delay" value="200" min="50" max="2000" step="50"></div>
-              <div class="f-g"><label>Timeout (s)</label><input type="number" id="scn-rw-timeout" value="1.0" min="0.3" max="5" step="0.1"></div>
               <button class="btn btn-p" onclick="scnRunRailway()"><span data-i18n="startScan">شروع اسکن</span></button>
               <button class="btn btn-g" onclick="scnStop()"><span data-i18n="stop">توقف</span></button>
             </div>
@@ -1202,42 +1160,6 @@ tr{animation:fadeIn .3s ease}
               </div>
             </div>
           </div>
-
-          <!-- SNI PANE -->
-          <div class="scn-pane" id="scn-pane-sni">
-            <div class="scn-cfg">
-              <div class="f-g" style="flex:2">
-                <label>SNI (Reality Target)</label>
-                <div style="display:flex;gap:6px">
-                  <input type="text" id="scn-sni-input" placeholder="SNI را وارد کنید" dir="ltr" style="flex:1">
-                  <button class="btn btn-p" onclick="scnRunSingleSni()" title="اسکن این SNI">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div class="scn-hint px-hint">SNI مورد نظر را وارد کنید یا روی «Auto Scan» کلیک کنید تا از لیست sni_reality_for_scan.txt اسکن شود. ۳ تای سریع‌تر ذخیره می‌شوند.</div>
-            <div class="scn-cfg" style="margin-top:8px">
-              <button class="btn btn-p" onclick="scnRunAutoSni()" id="scn-sni-auto-btn">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                Auto Scan
-              </button>
-              <button class="btn btn-g" onclick="scnStopSni()">توقف</button>
-            </div>
-            <div class="scn-progress" style="margin-top:10px"><div class="scn-bar" id="scn-sni-bar"></div></div>
-            <div class="scn-stats">
-              <div class="scn-chip"><b id="scn-sni-tried">۰</b><span>تست شده</span></div>
-              <div class="scn-chip"><b id="scn-sni-found">۰</b><span>یافت شده</span></div>
-              <div class="scn-chip"><b id="scn-sni-best">--</b><span>بهترین پینگ</span></div>
-            </div>
-            <div class="scn-list" id="scn-sni-list">
-              <div class="scn-empty">برای شروع، «Auto Scan» را بزنید</div>
-            </div>
-            <div class="scn-saved" style="margin-top:14px">
-              <div class="scn-saved-t">سریع‌ترین SNIs ذخیره‌شده (sni_reality.txt) — <button class="btn btn-sm btn-g" onclick="scnLoadSniResults()">بروزرسانی</button></div>
-              <div class="scn-saved-tags" id="scn-sni-results"></div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -1272,12 +1194,12 @@ tr{animation:fadeIn .3s ease}
             <div class="f-g" style="margin-top:10px"><label data-i18n="cfToken">Cloudflare API Token</label>
               <div style="display:flex;gap:8px">
                 <input type="password" id="wk-token" dir="ltr" style="flex:1" autocomplete="off">
-                <a class="btn btn-sm btn-g" href="https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_routes%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_kv_storage%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_r2%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22dns%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22zone%22%2C%22type%22%3A%22read%22%7D%5D&accountId=%2A&zoneId=all&name=spider-Token" target="_blank" rel="noopener" style="text-decoration:none;white-space:nowrap">
+                <a class="btn btn-sm btn-g" href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener" style="text-decoration:none;white-space:nowrap">
                   <span data-i18n="getToken">گرفتن توکن</span>
                 </a>
               </div>
             </div>
-            <div class="px-hint" style="font-size:10px;color:var(--txt2);margin-bottom:6px">فقط توکن با دسترسی Zone:Read + DNS:Edit بسازید. نیازی به Account ID نیست — به‌صورت خودکار شناسایی می‌شود.</div>
+            <div class="f-g"><label data-i18n="cfAccountId">Account ID</label><input type="text" id="wk-account" dir="ltr" placeholder="e.g. 1a2b3c..."></div>
             <div class="px-hint" data-i18n="workerAutoName">نام و دامنه Worker به‌صورت خودکار از اکانت Cloudflare گرفته می‌شود.</div>
             <button class="btn btn-p" style="width:100%;margin-top:10px" onclick="workerSetup()"><span data-i18n="cfConnect">اتصال و Deploy</span></button>
           </div>
@@ -1404,17 +1326,17 @@ tr{animation:fadeIn .3s ease}
   <form onsubmit="submitCreateUser(event)">
     <div class="f-r">
       <div class="f-g"><label data-i18n="username">نام کاربری</label><input type="text" id="cu-name" required></div>
-      <div class="f-g"><label data-i18n="conn">اتصال همزمان</label><input type="number" id="cu-conn" placeholder="∞ نامحدود"></div>
+      <div class="f-g"><label data-i18n="conn">اتصال همزمان</label><input type="number" id="cu-conn" value="2"></div>
     </div>
     <div class="f-r">
-      <div class="f-g"><label data-i18n="volume">حجم</label><input type="number" id="cu-vol" placeholder="∞ نامحدود"></div>
+      <div class="f-g"><label data-i18n="volume">حجم</label><input type="number" id="cu-vol" value="20"></div>
       <div class="f-g"><label data-i18n="unit">واحد</label><select id="cu-vol-u"><option value="GB">GB</option><option value="MB">MB</option></select></div>
-      <div class="f-g"><label data-i18n="expire">اعتبار</label><input type="number" id="cu-exp" placeholder="∞ نامحدود"></div>
+      <div class="f-g"><label data-i18n="expire">اعتبار</label><input type="number" id="cu-exp" value="30"></div>
       <div class="f-g"><label data-i18n="unit">واحد</label><select id="cu-exp-u"><option value="days" data-i18n="day">روز</option><option value="months" data-i18n="month">ماه</option></select></div>
     </div>
     <div class="f-g">
       <label data-i18n="inboundsMulti">اینباندها (چندتایی)</label>
-      <div class="px-hint" data-i18n="inboundPickHint">برای هر اینباند، گزینه‌های مخصوصش نمایش داده می‌شود: Worker → انتخاب کشور؛ VLESS غیرپیش‌فرض → Cloudflare و Railway؛ Reality → بدون گزینه.</div>
+      <div class="px-hint" data-i18n="inboundPickHint">برای هر اینباند، گزینه‌های مخصوصش نمایش داده می‌شود: Worker → انتخاب کشور، TLS → سوییچ IP اسکنر، Reality → بدون گزینه.</div>
       <div id="cu-inbound" class="f-r" style="gap:8px;margin-top:6px"></div>
     </div>
     <div class="f-g" style="display:flex;align-items:center;gap:8px;margin-top:8px">
@@ -1447,7 +1369,7 @@ tr{animation:fadeIn .3s ease}
     </div>
     <div class="f-g">
       <label data-i18n="inboundsMulti">اینباندها (چندتایی)</label>
-      <div class="px-hint" data-i18n="inboundPickHint">برای هر اینباند، گزینه‌های مخصوصش نمایش داده می‌شود: Worker → انتخاب کشور؛ VLESS غیرپیش‌فرض → Cloudflare و Railway؛ Reality → بدون گزینه.</div>
+      <div class="px-hint" data-i18n="inboundPickHint">برای هر اینباند، گزینه‌های مخصوصش نمایش داده می‌شود: Worker → انتخاب کشور، TLS → سوییچ IP اسکنر، Reality → بدون گزینه.</div>
       <div id="eu-inbound" class="f-r" style="gap:8px;margin-top:6px"></div>
     </div>
     <div class="modal-btns">
@@ -1463,22 +1385,7 @@ tr{animation:fadeIn .3s ease}
   <form onsubmit="submitInbound(event)">
     <input type="hidden" id="ib-id">
     <div class="f-g"><label data-i18n="inboundName">نام اینباند</label><input type="text" id="ib-name" required data-i18n-placeholder="inboundName" placeholder="مثال: Main-WS"></div>
-    <div class="f-r">
-      <div class="f-g"><label>Protocol</label><select id="ib-protocol" onchange="onProtocolChange()">
-        <option value="vless">VLESS</option>
-        <option value="wireguard">WireGuard / AmneziaWG</option>
-        <option value="telegram">Telegram Proxy</option>
-      </select></div>
-    </div>
-
-    <!-- Internal listen port: the port the server/Xray actually listens on. -->
-    <div class="f-g" id="ib-internal-port-wrap">
-      <label>Internal Port (پورت داخلی)</label>
-      <input type="number" id="ib-port" value="443" min="1" max="65535" dir="ltr" placeholder="443">
-      <div class="px-hint" style="font-size:10px">این پورت پورت واقعی Listen سرور است.</div>
-    </div>
-
-    <div id="ib-tls-fields">
+    <div class="f-g"><label data-i18n="intPort">پورت اصلی (پورتی که سرور روی آن گوش میدهد)</label><input type="number" id="ib-port" required placeholder="8443" dir="ltr"></div>
     <div class="f-g"><label data-i18n="securityType">امنیت</label><select id="ib-security" onchange="onSecurityChange()">
       <option value="tls">TLS</option>
       <option value="reality">Reality</option>
@@ -1487,81 +1394,24 @@ tr{animation:fadeIn .3s ease}
 
     <!-- Shared external address (used for both TLS and Reality) -->
     <div class="f-g"><label data-i18n="extDomain">دامنه خارجی (در آدرس کانفیگ)</label><input type="text" id="ib-extdomain" dir="ltr" data-i18n-placeholder="extDomainPlace" placeholder="مثال: tokaido.proxy.rlwy.net"></div>
-    <div class="f-g"><label data-i18n="extPortCfg">پورت خارجی (در آدرس کانفیگ)</label><input type="number" id="ib-extport" value="443" dir="ltr" placeholder="443"></div>
+    <div class="f-r">
+      <div class="f-g"><label data-i18n="extPortCfg">پورت خارجی (در آدرس کانفیگ)</label><input type="number" id="ib-extport" value="443" dir="ltr" placeholder="443"></div>
+      <div class="f-g"><label>SNI</label><input type="text" id="ib-sni" value="is1-ssl.mzstatic.com" dir="ltr" readonly data-i18n-title="sniFixed" title="SNI هدف ثابت"></div>
     </div>
 
     <!-- Reality-only fields -->
     <div id="ib-reality-fields" class="hidden">
       <div class="divider"></div>
       <div style="font-size:11px;color:var(--neon);font-weight:700;margin-bottom:8px" data-i18n="realitySettings">تنظیمات Reality</div>
-      <div class="f-g"><label>SNI (Server Name / Destination)</label>
-        <div style="display:flex;gap:6px;align-items:flex-end">
-          <input type="text" id="ib-sni" value="is1-ssl.mzstatic.com" dir="ltr" placeholder="مثلاً www.google.com" style="flex:1">
-          <button type="button" class="btn btn-sm btn-b" onclick="snPickFastest()" title="سریع‌ترین SNI از sni_reality.txt" style="border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-          </button>
-        </div>
-      </div>
       <div class="f-r">
         <div class="f-g"><label>Private Key (x25519)</label><input type="text" id="ib-privkey" dir="ltr" data-i18n-placeholder="autoGen" placeholder="تولید خودکار"></div>
         <div class="f-g"><label>Public Key</label><input type="text" id="ib-pubkey" dir="ltr" data-i18n-placeholder="autoGen" placeholder="تولید خودکار" readonly></div>
       </div>
       <button type="button" class="btn btn-sm btn-b" onclick="generateRealityKeysUI()" style="width:100%;margin-bottom:10px"><span data-i18n="genRealityKey">تولید کلید Reality (x25519)</span></button>
+      <div class="f-g"><label data-i18n="dest">Destination</label><input type="text" id="ib-dest" value="is1-ssl.mzstatic.com:443" dir="ltr"></div>
+      <div class="f-g"><label data-i18n="serverNames">Server Names (SNI)</label><input type="text" id="ib-servernames" value="is1-ssl.mzstatic.com" dir="ltr" data-i18n-placeholder="commaSep" placeholder="با کاما جدا کنید"></div>
       <div class="f-g"><label data-i18n="shortIds">Short IDs</label><div style="display:flex;gap:6px"><input type="text" id="ib-shortids" value="" dir="ltr" data-i18n-placeholder="hex8" placeholder="هگز ۸ رقمی — خالی = تصادفی" style="flex:1"><button type="button" class="btn btn-sm" onclick="generateShortId()" style="white-space:nowrap"><span data-i18n="generate">+ تولید</span></button></div></div>
       <div class="f-g"><label data-i18n="spiderx">SpiderX</label><input type="text" id="ib-spiderx" dir="ltr" placeholder="/" value="/"></div>
-    </div>
-
-    <!-- WireGuard / AmneziaWG fields -->
-    <div id="ib-wg-fields" class="hidden">
-      <div class="divider"></div>
-      <div style="font-size:11px;color:var(--neon);font-weight:700;margin-bottom:8px">AmneziaWG Settings</div>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:8px 12px;background:rgba(0,225,193,.06);border:1px solid var(--border);border-radius:10px">
-        <button type="button" class="ios-switch on" id="ib-wg-warp" onclick="this.classList.toggle('on')"></button>
-        <div>
-          <div style="font-size:12px;font-weight:700;color:var(--txt)">Cloudflare WARP Mode</div>
-          <div style="font-size:10px;color:var(--txt2)">فعال: از زیرساخت WARP Cloudflare استفاده می‌شود. غیرفعال: سرور WireGuard سفارشی.</div>
-        </div>
-      </div>
-      <div class="f-g"><label>Endpoint</label>
-        <select id="ib-wg-endpoint" style="width:100%;padding:9px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:10px;color:var(--txt);font-size:12px;font-family:monospace">
-          <option value="">Loading...</option>
-        </select>
-      </div>
-      <div class="f-r">
-        <div class="f-g"><label>MTU</label><input type="number" id="ib-wg-mtu" value="1280" dir="ltr"></div>
-        <div class="f-g"><label>Address</label><input type="text" id="ib-wg-address" value="172.16.0.2/32" dir="ltr"></div>
-      </div>
-      <div class="f-g"><label>DNS</label><input type="text" id="ib-wg-dns" value="1.1.1.1,1.0.0.1" dir="ltr"></div>
-      <div class="f-g"><label>Server Public Key</label><input type="text" id="ib-wg-pubkey" dir="ltr" placeholder="Auto-generated"></div>
-      <button type="button" class="btn btn-sm btn-b" onclick="generateWGKeys()" style="width:100%;margin-bottom:10px">تولید کلید WireGuard</button>
-      <div style="font-size:10px;color:var(--txt2);margin-bottom:8px">AmneziaWG Parameters</div>
-      <div class="f-r">
-        <div class="f-g"><label>Jc</label><input type="number" id="ib-wg-jc" value="3" dir="ltr"></div>
-        <div class="f-g"><label>Jmin</label><input type="number" id="ib-wg-jmin" value="1" dir="ltr"></div>
-        <div class="f-g"><label>Jmax</label><input type="number" id="ib-wg-jmax" value="3" dir="ltr"></div>
-      </div>
-      <div class="f-r">
-        <div class="f-g"><label>S1</label><input type="number" id="ib-wg-s1" value="0" dir="ltr"></div>
-        <div class="f-g"><label>S2</label><input type="number" id="ib-wg-s2" value="0" dir="ltr"></div>
-      </div>
-      <div class="f-r">
-        <div class="f-g"><label>H1</label><input type="number" id="ib-wg-h1" value="1" dir="ltr"></div>
-        <div class="f-g"><label>H2</label><input type="number" id="ib-wg-h2" value="2" dir="ltr"></div>
-        <div class="f-g"><label>H3</label><input type="number" id="ib-wg-h3" value="3" dir="ltr"></div>
-        <div class="f-g"><label>H4</label><input type="number" id="ib-wg-h4" value="4" dir="ltr"></div>
-      </div>
-      <div class="f-g"><label>I1</label><input type="text" id="ib-wg-i1" dir="ltr" placeholder="Optional"></div>
-    </div>
-
-    <!-- Telegram Proxy fields -->
-    <div id="ib-tg-fields" class="hidden">
-      <div class="divider"></div>
-      <div style="font-size:11px;color:var(--neon);font-weight:700;margin-bottom:8px">Telegram Proxy Settings</div>
-      <div class="f-r">
-        <div class="f-g"><label>Internal Port</label><input type="number" id="ib-tg-intport" value="44344" dir="ltr" placeholder="44344"></div>
-        <div class="f-g"><label>External Port</label><input type="number" id="ib-tg-extport" value="443" dir="ltr" placeholder="443"></div>
-      </div>
-      <div class="f-g"><label>External Domain</label><input type="text" id="ib-tg-domain" dir="ltr" placeholder="proxy.example.com"></div>
     </div>
 
     <!-- Network group -->
@@ -1650,7 +1500,7 @@ var I18N = {
     'contactSub': 'برای پشتیبانی و همکاری با من در ارتباط باشید',
     'createUser': 'ایجاد کاربر جدید', 'editUser': 'ویرایش کاربر', 'username': 'نام کاربری', 'conn': 'اتصال همزمان', 'volume': 'حجم', 'unit': 'واحد', 'expire': 'اعتبار', 'day': 'روز', 'month': 'ماه',
     'inboundsMulti': 'اینباندها (چندتایی)', 'noInboundOpt': 'اینباندی وجود ندارد',
-    'inboundPickHint': 'برای هر اینباند، گزینه‌های مخصوصش نمایش داده می‌شود: Worker → انتخاب کشور؛ VLESS غیرپیش‌فرض → Cloudflare و Railway؛ Reality → بدون گزینه.',
+    'inboundPickHint': 'برای هر اینباند، گزینه‌های مخصوصش نمایش داده می‌شود: Worker → انتخاب کشور، TLS → سوییچ IP اسکنر، Reality → بدون گزینه.',
     'workerCountries': 'کشورهای چندمنطقه‌ای (برای هر کشور یک تیک فعال کنید):',
     'addCfIps': 'افزودن ۱۰ کانفیگ با IPهای Cloudflare اسکن‌شده',
     'addRailwayIps': 'افزودن ۱۰ کانفیگ با IPهای Railway اسکن‌شده',
@@ -2002,11 +1852,11 @@ async function loadDashboard() {
     var s = await api('/stats');
     var html = '<div class="stats">';
     html += statCard(iconUsers, '<span id="dash-users">' + s.active_users + ' / ' + s.total_users + '</span>', t('activeUsers'));
-    html += statCard(iconTraffic, '<span id="dash-traffic">' + fmtBytes((s.traffic_usage_gb || 0) * 1073741824) + '</span>', t('trafficUsed'));
+    html += statCard(iconTraffic, '<span id="dash-traffic">' + fmtBytes(s.traffic_usage_gb * 1073741824) + '</span>', t('trafficUsed'));
     html += statCard(iconConn, '<span id="dash-conn">' + (s.active_connections || '۰') + '</span>', t('activeConns'));
     html += statCard(iconUptime, '<span id="dash-uptime">...</span>', t('uptime'));
     html += '</div>';
-    html += '<div class="panel"><div class="panel-h" style="align-items:center"><span class="glow">' + t('srv') + '</span><span id="dash-server-status" class="badge badge-g" style="margin-right:auto;font-size:9px;animation:pulse 1.5s infinite">LIVE</span></div>';
+    html += '<div class="panel"><div class="panel-h" style="align-items:center"><span class="glow">' + t('srv') + '</span><span class="badge badge-g" style="margin-right:auto;font-size:9px;animation:pulse 1.5s infinite">' + t('live') + '</span></div>';
     html += '<div class="srv-bar"><div class="srv-bar-h"><strong>' + t('cpu') + '</strong><span id="live-cpu">--</span>%</div><div class="srv-bar-bg"><div class="srv-bar-f" id="bar-cpu" style="width:0%"></div></div></div>';
     html += '<div class="srv-bar"><div class="srv-bar-h"><strong>' + t('ram') + '</strong><span id="live-ram">--</span></div><div class="srv-bar-bg"><div class="srv-bar-f" id="bar-ram" style="width:0%"></div></div></div>';
     html += '<div class="srv-bar"><div class="srv-bar-h"><strong>' + t('disk') + '</strong><span id="live-disk">--</span></div><div class="srv-bar-bg"><div class="srv-bar-f" id="bar-disk" style="width:0%"></div></div></div>';
@@ -2035,14 +1885,6 @@ async function refreshLiveStats() {
     var recvEl = $id('live-net-recv'); if (recvEl) recvEl.textContent = (st.net_recv_mb||'0') + ' MB';
     var uptEl = $id('live-uptime'); if (uptEl) uptEl.textContent = fmtUptime(st.uptime_seconds);
     var duptEl = $id('dash-uptime'); if (duptEl) duptEl.textContent = fmtUptime(st.uptime_seconds);
-    var connEl = $id('dash-conn'); if (connEl) connEl.textContent = String(st.active_connections || 0);
-    var trEl = $id('dash-traffic'); if (trEl) trEl.textContent = fmtBytes((st.total_traffic_used_tb || 0) * 1099511627776);
-    var usrEl = $id('dash-users'); if (usrEl) usrEl.textContent = (st.active_users || 0) + ' / ' + (st.total_users || 0);
-    var statusEl = $id('dash-server-status'); if (statusEl) {
-      var ss = String(st.server_status || 'healthy');
-      statusEl.textContent = ss === 'healthy' ? 'HEALTHY' : ss === 'degraded' ? 'DEGRADED' : 'DOWN';
-      statusEl.className = 'badge ' + (ss === 'healthy' ? 'badge-g' : ss === 'degraded' ? 'badge-b' : 'badge-r');
-    }
   } catch(e) { /* keep old values */ }
 }
 
@@ -2149,11 +1991,11 @@ async function openCreateUser() {
   }
   populateInboundSelects();
   $id('cu-name').value = '';
-  $id('cu-vol').value = '';
+  $id('cu-vol').value = '20';
   $id('cu-vol-u').value = 'GB';
-  $id('cu-exp').value = '';
+  $id('cu-exp').value = '30';
   $id('cu-exp-u').value = 'days';
-  $id('cu-conn').value = '';
+  $id('cu-conn').value = '2';
   var sniSw = $id('cu-sni-spoof'); if (sniSw) sniSw.classList.remove('on');
   openModal('mod-user');
 }
@@ -2200,7 +2042,7 @@ async function submitCreateUser(e) {
       username: $id('cu-name').value,
       traffic_limit_gb: vu === 'GB' ? v : v / 1024,
       expire_days: eu === 'months' ? ex * 30 : ex,
-      concurrent_connections: parseInt($id('cu-conn').value) || 0,
+      concurrent_connections: parseInt($id('cu-conn').value) || 2,
       inbound_ids: inbound_ids,
       proxy_countries: allCountries,
       proxy_country: firstCountry,
@@ -2219,65 +2061,27 @@ async function submitCreateUser(e) {
 }
 
 var EU_INBOUND_PICKS = {};
-var EU_COUNTRIES = {};  // inboundId -> { worker: [codes] }
 function renderEditInboundPicker(u) {
   var wrap = $id('eu-inbound');
   if (!wrap) return;
   var cur = u.inbound_ids || (u.inbound_id ? [u.inbound_id] : []);
   EU_INBOUND_PICKS = {};
   cur.forEach(function(i) { EU_INBOUND_PICKS[i] = true; });
-  // Initialize country state from user's existing proxy_countries
-  if (!Object.keys(EU_COUNTRIES).length) {
-    var existingCountries = u.proxy_countries || [];
-    ALL_IB.forEach(function(ib) {
-      if ((ib.protocol || '').toLowerCase() === 'worker') {
-        EU_COUNTRIES[ib.inbound_id] = { worker: existingCountries.slice() };
-      }
-    });
-  }
   var html = '';
   ALL_IB.forEach(function(ib) {
     var id = ib.inbound_id;
     var selected = EU_INBOUND_PICKS[id] === true;
     var proto = (ib.protocol || 'vless').toUpperCase();
-    var type = (ib.protocol || 'vless').toLowerCase();
     html += '<div class="ib-pick' + (selected ? ' selected' : '') + '" data-id="' + esc(id) + '" onclick="euToggleIbPick(this)">' +
-      '<div class="ib-pick-ic"><span class="material-symbols-outlined">' + (type === 'worker' ? 'bolt' : type === 'wireguard' ? 'vpn_key' : 'cloud') + '</span></div>' +
+      '<div class="ib-pick-ic"><span class="material-symbols-outlined">' + ((ib.protocol || '').toLowerCase() === 'worker' ? 'bolt' : 'cloud') + '</span></div>' +
       '<div class="ib-pick-info">' +
         '<div class="ib-pick-name">' + esc(ib.name) + '</div>' +
         '<div class="ib-pick-meta">' + esc(proto + ' · ' + (ib.network || 'ws') + ' · ' + (ib.security || 'tls')) + '</div>' +
       '</div>' +
       '<div class="ib-pick-check"><span class="material-symbols-outlined">check</span></div>' +
     '</div>';
-    if (selected && type === 'worker') {
-      var sel = EU_COUNTRIES[id] || {};
-      var chipHtml = '';
-      (window.cuWorkerProxies ? cuWorkerProxies() : []).forEach(function(p) {
-        var flag = window.cuCodeToFlag ? cuCodeToFlag(p.code) : '';
-        var checked = (sel.worker || []).indexOf(p.code) !== -1 ? ' selected' : '';
-        chipHtml += '<span class="country-tick' + checked + '" data-code="' + esc(p.code) + '" onclick="euPickWorkerCountry(\'' + esc(id) + '\',this)">' +
-          '<span class="ck material-symbols-outlined">check</span>' + flag + ' ' + esc(p.country || p.code) + '</span>';
-      });
-      html += '<div style="flex-basis:100%;padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);margin-top:4px">';
-      html += '<div style="font-size:11px;color:var(--txt2);margin-bottom:6px">' + (t('workerCountries') || 'Worker Countries') + '</div>';
-      html += '<div style="display:flex;flex-wrap:wrap;gap:6px;direction:ltr;text-align:left">' + chipHtml + '</div>';
-      html += '</div>';
-    }
   });
   wrap.innerHTML = html || '<span style="font-size:11px;color:var(--txt2)">' + t('noInboundOpt') + '</span>';
-}
-
-function euPickWorkerCountry(ibId, el) {
-  el.classList.toggle('selected');
-  var arr = EU_COUNTRIES[ibId] = EU_COUNTRIES[ibId] || {};
-  arr.worker = arr.worker || [];
-  var code = el.getAttribute('data-code');
-  var idx = arr.worker.indexOf(code);
-  if (el.classList.contains('selected')) {
-    if (idx === -1) arr.worker.push(code);
-  } else {
-    if (idx !== -1) arr.worker.splice(idx, 1);
-  }
 }
 function euToggleIbPick(el) {
   var id = el.getAttribute('data-id');
@@ -2291,7 +2095,6 @@ function selectedEditInboundIds() {
 function editUser(uid) {
   var u = ALL_USERS.find(function(x) { return x.user_id === uid; });
   if (!u) return;
-  EU_COUNTRIES = {};
   $id('eu-id').value = uid;
   $id('eu-name').value = u.username || '';
   $id('eu-vol').value = (u.traffic_limit_bytes ? (u.traffic_limit_bytes / 1073741824).toFixed(0) : '0');
@@ -2312,14 +2115,6 @@ async function submitEditUser(e) {
     var saved = localStorage.getItem('spider-spoof-settings');
     if (saved) { var s = JSON.parse(saved); fakeSni = s.fakeSni || ''; spoofIp = s.spoofIp || ''; }
   } catch(e) {}
-  // Collect all selected worker countries from EU_COUNTRIES
-  var allEuCountries = [];
-  Object.keys(EU_COUNTRIES).forEach(function(ibId) {
-    var c = EU_COUNTRIES[ibId] || {};
-    (c.worker || []).forEach(function(code) {
-      if (allEuCountries.indexOf(code) === -1) allEuCountries.push(code);
-    });
-  });
   try {
     await api('/api/users/' + uid, {method: 'PATCH', body: {
       username: $id('eu-name').value,
@@ -2330,9 +2125,7 @@ async function submitEditUser(e) {
       reset_traffic: $id('eu-reset') ? $id('eu-reset').checked : false,
       fake_sni: fakeSni,
       spoof_ip: spoofIp,
-      inbound_ids: selectedEditInboundIds(),
-      proxy_countries: allEuCountries,
-      proxy_country: allEuCountries[0] || ''
+      inbound_ids: selectedEditInboundIds()
     }});
     toast(t('toast.userUpdated'), 'ok');
     closeModal('mod-edit-user');
@@ -2387,42 +2180,30 @@ function renderInbounds() {
   var html = '<div class="stats" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">';
   for (var i = 0; i < ALL_IB.length; i++) {
     var ib = ALL_IB[i];
-    var proto = (ib.protocol || 'vless').toLowerCase();
-    var protoBadge = proto === 'reality' ? 'badge-p' : proto === 'wireguard' ? 'badge-b' : proto === 'telegram' ? 'badge-b' : 'badge-b';
+    var protoBadge = ib.protocol === 'reality' ? 'badge-p' : 'badge-b';
     html += '<div class="stat" style="text-align:right">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
-    html += '<strong>' + esc(ib.name) + '</strong><span class="badge ' + protoBadge + '">' + proto.toUpperCase() + '</span>';
+    html += '<strong>' + esc(ib.name) + '</strong><span class="badge ' + protoBadge + '">' + (ib.protocol || 'vless').toUpperCase() + '</span>';
     html += '</div>';
     html += '<div style="font-size:11px;color:var(--txt2);line-height:1.8">';
-    if (proto === 'wireguard') {
-      var wg = ib.wireguard_settings || {};
-      html += 'Endpoint: ' + (wg.endpoint || '—') + '<br>';
-      html += t('port') + ': ' + (ib.port || '51820') + '<br>';
-      html += 'MTU: ' + (wg.mtu || '1280') + '<br>';
-      html += 'Address: ' + (wg.address || '—');
-    } else if (proto === 'telegram') {
-      var tg = ib.telegram_settings || {};
-      html += 'Domain: ' + (tg.external_domain || ib.external_domain || '—') + '<br>';
-      html += 'Internal Port: ' + (tg.internal_port || ib.port || '—') + '<br>';
-      html += 'External Port: ' + (tg.external_port || ib.external_port || '—');
-    } else if (proto === 'worker') {
+    var isReality = (ib.protocol === 'reality' || ib.security === 'reality');
+    if (isReality) {
+      // Reality: user fills domain + ports; pbk is auto-generated.
       html += t('domain') + ': ' + (ib.external_domain || '—') + '<br>';
-      html += t('port') + ': 443 (Worker)';
-    } else if (ib.protocol === 'reality' || ib.security === 'reality') {
+      html += t('port') + ': ' + (ib.port || '—') + '<br>';
+    } else if (ib.protocol === 'worker') {
       html += t('domain') + ': ' + (ib.external_domain || '—') + '<br>';
-      html += t('port') + ': ' + (ib.port || '—');
+      html += t('port') + ': 443 (Worker)<br>';
     } else {
+      // WS/TLS: fully automatic with the panel's main domain.
       html += t('domain') + ': ' + (ib.external_domain || '—') + ' (خودکار)<br>';
-      html += t('port') + ': 443 / relay';
+      html += t('port') + ': 443 / relay<br>';
     }
-    if (proto !== 'wireguard' && proto !== 'telegram') {
-      html += '<br>' + t('secNetwork') + ': ' + (ib.network || 'tcp') + ' | ' + t('security') + ': ' + (ib.security || 'none');
-    }
-    html += '<br>' + t('usersCount') + ': ' + (ib.users_count || 0);
+    html += t('secNetwork') + ': ' + (ib.network || 'tcp') + ' | ' + t('security') + ': ' + (ib.security || 'none') + '<br>';
+    html += t('usersCount') + ': ' + (ib.users_count || 0);
     html += '</div>';
     html += '<div style="margin-top:10px;display:flex;gap:4px">';
     html += '<button class="btn btn-sm btn-b" onclick="editInbound(\'' + ib.inbound_id + '\')">' + t('edit') + '</button>';
-    html += '<button class="btn btn-sm btn-r" onclick="deleteInbound(\'' + ib.inbound_id + '\')">' + t('delete') + '</button>';
     html += '</div></div>';
   }
   html += '</div>';
@@ -2456,20 +2237,9 @@ function selectedInboundIds() {
 
 function onSecurityChange() {
   var sec = $id('ib-security').value;
-  toggleById('ib-reality-fields', sec === 'reality');
-}
-
-function onProtocolChange() {
-  var proto = $id('ib-protocol').value;
-  var isWg = proto === 'wireguard';
-  var isTg = proto === 'telegram';
-  var isTls = !isWg && !isTg;
-  toggleById('ib-tls-fields', isTls);
-  toggleById('ib-net-wrap', isTls);
-  toggleById('ib-internal-port-wrap', isTls);
-  toggleById('ib-wg-fields', isWg);
-  toggleById('ib-tg-fields', isTg);
-  if (isWg) loadWGEndpoints();
+  var realF = $id('ib-reality-fields');
+  if (sec === 'reality') { realF.classList.remove('hidden'); }
+  else { realF.classList.add('hidden'); }
 }
 
 function onNetworkChange() {
@@ -2480,27 +2250,6 @@ function onNetworkChange() {
 }
 
 function toggleById(id, show) { var el = $id(id); if (el) { if (show) el.classList.remove('hidden'); else el.classList.add('hidden'); } }
-
-async function loadWGEndpoints() {
-  try {
-    var r = await api('/api/wg/endpoints');
-    var sel = $id('ib-wg-endpoint');
-    if (!sel) return;
-    var eps = r.endpoints || [];
-    sel.innerHTML = eps.length
-      ? eps.map(function(e) { return '<option value="' + esc(e) + '">' + esc(e) + '</option>'; }).join('')
-      : '<option value="">No endpoints found</option>';
-  } catch(e) { console.error(e); }
-}
-
-async function generateWGKeys() {
-  try {
-    var r = await api('/api/tools/generate-reality-keys', {method: 'POST'});
-    // Reuse x25519 keygen for WireGuard keys (same curve)
-    if (r.private_key) $id('ib-wg-pubkey').value = r.public_key || '';
-    toast('WireGuard keys generated', 'ok');
-  } catch(e) { toast('Key generation failed', 'err'); }
-}
 
 function onDomainChange() {
   var d = $id('ib-domain').value;
@@ -2534,88 +2283,32 @@ async function generateShortId() {
 }
 
 function openCreateInbound() {
-  // Reset form for new inbound creation
-  $id('ib-id').value = '';
-  $id('ib-title').textContent = t('newInbound');
-  $id('ib-name').value = '';
-  $id('ib-protocol').value = 'vless';
-  $id('ib-port').value = '443';
-  $id('ib-security').value = 'tls';
-  $id('ib-network').value = 'ws';
-  $id('ib-extdomain').value = '';
-  $id('ib-extport').value = '443';
-  $id('ib-sni').value = 'is1-ssl.mzstatic.com';
-  $id('ib-privkey').value = '';
-  $id('ib-pubkey').value = '';
-  $id('ib-shortids').value = '';
-  $id('ib-spiderx').value = '/';
-  $id('ib-wspath').value = '/';
-  $id('ib-xhttppath').value = '/';
-  $id('ib-xhttp-mode').value = 'auto';
-  $id('ib-grpc-svc').value = 'grpc';
-  $id('ib-submit').textContent = t('createInbound');
-  onProtocolChange();
-  onSecurityChange();
-  onNetworkChange();
-  openModal('mod-inbound');
+  // Adding new inbounds is disabled — only the default inbounds are used.
+  toast(t('inboundFixed'), 'warn');
 }
 
 function editInbound(iid) {
   var ib = ALL_IB.find(function(x) { return x.inbound_id === iid; });
   if (!ib) return;
   var isReality = (ib.protocol === 'reality' || ib.security === 'reality');
-  var isWg = (ib.protocol || '').toLowerCase() === 'wireguard';
-  var isTg = (ib.protocol || '').toLowerCase() === 'telegram';
   $id('ib-title').textContent = t('editInbound');
   $id('ib-id').value = iid;
   $id('ib-name').value = ib.name || '';
-  $id('ib-protocol').value = ib.protocol || 'vless';
   $id('ib-sni').value = ib.sni || 'is1-ssl.mzstatic.com';
   var rs = ib.reality_settings || {};
   $id('ib-privkey').value = (rs || {}).private_key || '';
   $id('ib-pubkey').value = (rs || {}).public_key || '';
   $id('ib-shortids').value = (rs || {}).short_id || '';
   $id('ib-spiderx').value = (rs || {}).spiderx || '/';
+  $id('ib-dest').value = (rs || {}).dest || 'is1-ssl.mzstatic.com:443';
+  $id('ib-servernames').value = (rs || {}).sni || 'is1-ssl.mzstatic.com';
   var ws = ib.ws_settings || {}; var xh = ib.xhttp_settings || {};
   $id('ib-wspath').value = ws.path || '/';
   $id('ib-xhttppath').value = xh.path || '/';
   $id('ib-xhttp-mode').value = xh.mode || 'auto';
   $id('ib-grpc-svc').value = (ib.grpc_settings || {}).serviceName || 'grpc';
 
-  if (isWg) {
-    // WireGuard: populate WG-specific fields
-    var wg = ib.wireguard_settings || {};
-    var warpEl = $id('ib-wg-warp');
-    if (warpEl) { if (wg.warp_mode) warpEl.classList.add('on'); else warpEl.classList.remove('on'); }
-    $id('ib-port').value = ib.port || 51820;
-    $id('ib-wg-mtu').value = wg.mtu || '1280';
-    $id('ib-wg-address').value = wg.address || '172.16.0.2/32';
-    $id('ib-wg-dns').value = wg.dns || '1.1.1.1,1.0.0.1';
-    $id('ib-wg-pubkey').value = wg.server_public_key || '';
-    $id('ib-wg-jc').value = wg.jc || '3';
-    $id('ib-wg-jmin').value = wg.jmin || '1';
-    $id('ib-wg-jmax').value = wg.jmax || '3';
-    $id('ib-wg-s1').value = wg.s1 || '0';
-    $id('ib-wg-s2').value = wg.s2 || '0';
-    $id('ib-wg-h1').value = wg.h1 || '1';
-    $id('ib-wg-h2').value = wg.h2 || '2';
-    $id('ib-wg-h3').value = wg.h3 || '3';
-    $id('ib-wg-h4').value = wg.h4 || '4';
-    $id('ib-wg-i1').value = wg.i1 || '';
-    $id('ib-submit').textContent = t('updateInbound');
-    onProtocolChange();
-    openModal('mod-inbound');
-  } else if (isTg) {
-    // Telegram Proxy: populate TG-specific fields (only 3 fields)
-    var tg = ib.telegram_settings || {};
-    $id('ib-port').value = tg.internal_port || ib.port || 44344;
-    $id('ib-tg-intport').value = tg.internal_port || ib.port || 44344;
-    $id('ib-tg-extport').value = tg.external_port || ib.external_port || 443;
-    $id('ib-tg-domain').value = tg.external_domain || ib.external_domain || '';
-    $id('ib-submit').textContent = t('updateInbound');
-    onProtocolChange();
-    openModal('mod-inbound');
-  } else if (isReality) {
+  if (isReality) {
     // Reality: user fills domain + ports; pbk is auto-generated.
     $id('ib-security').value = 'reality';
     $id('ib-network').value = ib.network || 'xhttp';
@@ -2623,22 +2316,12 @@ function editInbound(iid) {
     $id('ib-extdomain').value = ib.external_domain || '';
     $id('ib-extport').value = ib.external_port || '';
     $id('ib-submit').textContent = t('updateInbound');
-    onProtocolChange();
     onSecurityChange();
     onNetworkChange();
     openModal('mod-inbound');
   } else {
-    // VLESS/TLS/WS: allow editing the actual inbound instead of silently refusing.
-    $id('ib-security').value = ib.security || 'tls';
-    $id('ib-network').value = ib.network || 'ws';
-    $id('ib-port').value = ib.port || '';
-    $id('ib-extdomain').value = ib.external_domain || '';
-    $id('ib-extport').value = ib.external_port || 443;
-    $id('ib-submit').textContent = t('updateInbound');
-    onProtocolChange();
-    onSecurityChange();
-    onNetworkChange();
-    openModal('mod-inbound');
+    // WS/TLS: fully automatic — nothing to configure.
+    toast(t('inboundAuto'), 'ok');
   }
 }
 
@@ -2647,83 +2330,44 @@ async function submitInbound(e) {
   var btn = $id('ib-submit'); btn.disabled = true;
   btn.textContent = t('saving');
   var iid = $id('ib-id').value;
-  var proto = $id('ib-protocol').value;
-  var isWg = proto === 'wireguard';
+  var network = $id('ib-network').value;
+  var security = $id('ib-security').value;
+  var sni = $id('ib-sni').value || 'is1-ssl.mzstatic.com';
 
+  // All inbounds are VLESS now.
   var body = {
     name: $id('ib-name').value,
-    protocol: proto,
+    protocol: 'vless',
+    port: parseInt($id('ib-port').value) || 8443,
+    external_port: parseInt($id('ib-extport').value) || null,
+    external_domain: $id('ib-extdomain').value || '',
+    network: network,
+    security: security,
+    sni: sni
   };
 
-  if (isWg) {
-    // WireGuard inbound - no port field needed, uses endpoint
-    body.wireguard_settings = {
-      warp_mode: $id('ib-wg-warp').classList.contains('on'),
-      endpoint: $id('ib-wg-endpoint').value || '',
-      mtu: $id('ib-wg-mtu').value || '1280',
-      address: $id('ib-wg-address').value || '172.16.0.2/32',
-      dns: $id('ib-wg-dns').value || '1.1.1.1,1.0.0.1',
-      server_public_key: $id('ib-wg-pubkey').value || '',
-      jc: $id('ib-wg-jc').value || '3',
-      jmin: $id('ib-wg-jmin').value || '1',
-      jmax: $id('ib-wg-jmax').value || '3',
-      s1: $id('ib-wg-s1').value || '0',
-      s2: $id('ib-wg-s2').value || '0',
-      h1: $id('ib-wg-h1').value || '1',
-      h2: $id('ib-wg-h2').value || '2',
-      h3: $id('ib-wg-h3').value || '3',
-      h4: $id('ib-wg-h4').value || '4',
-      i1: $id('ib-wg-i1').value || ''
+  // Reality settings
+  if (security === 'reality') {
+    body.reality_settings = {
+      private_key: $id('ib-privkey').value || '',
+      public_key: $id('ib-pubkey').value || '',
+      dest: $id('ib-dest').value || 'is1-ssl.mzstatic.com:443',
+      server_names: ($id('ib-servernames').value || '').split(',').map(function(s){return s.trim()}).filter(Boolean),
+      short_ids: $id('ib-shortids').value || '',
+      spiderx: $id('ib-spiderx').value || '/'
     };
-  } else if (proto === 'telegram') {
-    // Telegram Proxy inbound - only 3 fields: internal_port, external_port, external_domain
-    var internalPort = parseInt($id('ib-tg-intport').value) || 44344;
-    var externalPort = parseInt($id('ib-tg-extport').value) || 443;
-    body.telegram_settings = {
-      internal_port: internalPort,
-      external_port: externalPort,
-      external_domain: $id('ib-tg-domain').value || ''
-    };
-    // Use internal_port as the listening port
-    body.port = internalPort;
-    body.external_port = externalPort;
-    body.external_domain = $id('ib-tg-domain').value || '';
-  } else {
-    // VLESS / TLS / Reality
-    var network = $id('ib-network').value;
-    var security = $id('ib-security').value;
-    var sni = $id('ib-sni').value || 'is1-ssl.mzstatic.com';
-    var internalPort = parseInt($id('ib-port').value, 10);
-    body.port = Number.isFinite(internalPort) && internalPort > 0 ? internalPort : 443;
-    body.network = network;
-    body.security = security;
-    body.sni = sni;
-    body.external_port = parseInt($id('ib-extport').value) || null;
-    body.external_domain = $id('ib-extdomain').value || '';
+  }
 
-    if (security === 'reality') {
-      // For Reality: SNI is used as destination, server name, and SNI
-      var sniVal = $id('ib-sni').value || 'is1-ssl.mzstatic.com';
-      body.reality_settings = {
-        private_key: $id('ib-privkey').value || '',
-        public_key: $id('ib-pubkey').value || '',
-        short_ids: $id('ib-shortids').value || '',
-        spiderx: $id('ib-spiderx').value || '/',
-        dest: sniVal + ':443',
-        server_names: [sniVal],
-        sni: sniVal
-      };
-    }
-    if (network === 'ws') {
-      body.ws_settings = { path: $id('ib-wspath').value || '/' };
-    } else if (network === 'xhttp') {
-      body.xhttp_settings = {
-        path: $id('ib-xhttppath').value || '/',
-        mode: $id('ib-xhttp-mode').value || 'auto'
-      };
-    } else if (network === 'grpc') {
-      body.grpc_settings = { serviceName: $id('ib-grpc-svc').value || 'grpc' };
-    }
+  // Network settings
+  if (network === 'ws') {
+    body.ws_settings = { path: $id('ib-wspath').value || '/' };
+  } else if (network === 'xhttp') {
+    body.xhttp_settings = {
+      path: $id('ib-xhttppath').value || '/',
+      mode: $id('ib-xhttp-mode').value || 'auto'
+    };
+  } else if (network === 'grpc') {
+    body.grpc_settings = { serviceName: $id('ib-grpc-svc').value || 'grpc' };
   }
 
   try {
@@ -2783,12 +2427,8 @@ document.addEventListener('keydown', function(ev) {
 document.addEventListener('DOMContentLoaded', wireModalCloseButtons);
 wireModalCloseButtons();
 
-// ─── DOM Helper ───
-// $id is declared once at the top of this script. Keep this section for helpers only.
-
 // ─── Helpers ───
 function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function toFa(n) { return String(n).replace(/\d/g, function(d) { return '۰۱۲۳۴۵۶۷۸۹'[d]; }); }
 function fmtBytes(b) {
   if (!b || b <= 0) return '0 B';
   var u = ['B','KB','MB','GB','TB'], i = 0;
@@ -2861,9 +2501,17 @@ function togglePanelAudio(){var p=$id('panel-audio-player');var sw=$id('audio-au
 function loadProxyCountries(){}  // kept as no-op for loadAll()
 
 // ═══ IP SCANNER ═══
-var SCN_CF_RANGES = [];
-var SCN_RW_RANGES = [];
-var SCN_SNI_LIST = [];
+var SCN_CF_RANGES = [
+  [172, 64, 0, 0, 13], [104, 16, 0, 0, 12], [162, 159, 0, 0, 16], [108, 162, 192, 0, 18],
+  [104, 16, 24, 0, 14], [172, 67, 10, 0, 15], [162, 159, 36, 0, 16], [108, 162, 192, 0, 18],
+  [104, 18, 45, 0, 14], [172, 64, 50, 0, 14], [104, 16, 0, 0, 12], [162, 159, 0, 0, 16]
+];
+var SCN_RW_RANGES = [
+  [66, 33, 22, 0, 23], [66, 33, 23, 0, 24], [69, 46, 46, 0, 24],
+  [152, 55, 176, 0, 22], [152, 55, 180, 0, 22], [152, 55, 184, 0, 22],
+  [162, 220, 232, 0, 23], [162, 220, 234, 0, 23],
+  [208, 77, 244, 0, 23], [208, 77, 246, 0, 23]
+];
 var SCN_DOM_DEFAULTS = [
   'shuttle.proxy.rlwy.net', 'monorail.proxy.rlwy.net', 'caboose.proxy.rlwy.net',
   'viaduct.proxy.rlwy.net', 'acela.proxy.rlwy.net', 'sakura.proxy.rlwy.net',
@@ -2872,26 +2520,6 @@ var SCN_DOM_DEFAULTS = [
 ];
 var SCN_STOP = false;
 var scnCtx = { cf: {found: [], tried: 0, gen: 0, seq: 0}, railway: {found: [], tried: 0, gen: 0, seq: 0} };
-
-// Load CF subnets dynamically from server
-async function scnLoadRanges() {
-  try {
-    var r = await api('/api/scanner/cf-subnets');
-    if (r.subnets && r.subnets.length) {
-      SCN_CF_RANGES = r.subnets.map(function(s) {
-        var parts = s.split('/')[0].split('.');
-        var mask = parseInt(s.split('/')[1]) || 24;
-        return [parseInt(parts[0])||0, parseInt(parts[1])||0, parseInt(parts[2])||0, parseInt(parts[3])||0, mask];
-      });
-    }
-  } catch(e) { console.error('Failed to load CF subnets:', e); }
-  // Fallback ranges if API fails
-  if (!SCN_CF_RANGES.length) {
-    SCN_CF_RANGES = [[104, 16, 0, 0, 12], [172, 64, 0, 0, 13], [162, 159, 0, 0, 16]];
-  }
-  SCN_RW_RANGES = [[66, 33, 22, 0, 23], [66, 33, 23, 0, 24], [152, 55, 176, 0, 22]];
-}
-scnLoadRanges();
 
 // ═══ SPOOF SCANNER ═══
 // Cloudflare IP ranges from cf_subnets.txt
@@ -2906,7 +2534,17 @@ var SPF_IP_RANGES = [
   [198, 41, 128, 0, 18], [199, 27, 128, 0, 17], [162, 158, 0, 0, 15]
 ];
 // SNI list from sni-list.txt (truncated for performance - full list loaded on demand)
-var SPF_SNI_LIST = [];
+var SPF_SNI_LIST = [
+  "www.cloudflare.com", "www.hcaptcha.com", "api.cloudflare.com", "dash.cloudflare.com",
+  "workers.cloudflare.com", "pages.cloudflare.com", "developers.cloudflare.com",
+  "cloudflare-dns.com", "one.one.one.one", "1.1.1.1", "cloudflare.com",
+  "www.google.com", "www.youtube.com", "www.facebook.com", "www.microsoft.com",
+  "www.apple.com", "www.amazon.com", "www.github.com", "www.twitter.com",
+  "api.openai.com", "chatgpt.com", "www.anthropic.com", "www.deepseek.com",
+  "www.cloudflare-dns.com", "cdnjs.cloudflare.com", "assets.hcaptcha.com",
+  "analytics.hcaptcha.com", "challenges.cloudflare.com", "radar.cloudflare.com",
+  "speed.cloudflare.com", "speedtest.cloudflare.com", "cdn.cloudflare.com"
+];
 var SPF_STOP = false;
 var spfCtx = {
   ip: {found: [], tried: 0, gen: 0, seq: 0},
@@ -3026,10 +2664,7 @@ async function scnRunIPs(which) {
   var tried = 0;
   var live = {};   // ip -> {ms, ok} of last attempt (success and failure both shown)
   var loops = 0;
-  var BATCH = 32;
-  var pfx = which === 'cf' ? 'scn-cf' : 'scn-rw';
-  var scanDelay = parseInt($id(pfx + '-delay').value) || 200;
-  var scanTimeout = parseFloat($id(pfx + '-timeout').value) || 1.0;
+  var BATCH = 32;  // bigger batches = faster coverage
   while (found.length < count && loops < count * 20) {
     if (SCN_STOP) break;
     loops++;
@@ -3037,11 +2672,7 @@ async function scnRunIPs(which) {
     for (var b = 0; b < BATCH && found.length + batch.length < count * 3; b++) {
       batch.push(scnRandIp(ranges[Math.floor(Math.random() * ranges.length)]) + ':' + port);
     }
-    var resMap = await scnPingBatch(batch, scanTimeout);
-    // Rate limit: delay between batches to avoid flood behavior
-    if (scanDelay > 0 && loops < count * 20) {
-      await new Promise(function(resolve) { setTimeout(resolve, scanDelay); });
-    }
+    var resMap = await scnPingBatch(batch, 0.9);  // short timeout = fast cycle
     Object.keys(resMap).forEach(function(t) {
       tried++;
       var r = resMap[t];
@@ -3153,166 +2784,9 @@ function scnSwitch(which, btn) {
     spfRenderAdvDropdown();
     spfLoadSpoofSettings();
   }
-  if (which === 'sni') {
-    scnLoadSniResults();
-  }
 }
 
 function scnStop() { SCN_STOP = true; toast(t('scanStopped'), 'warn'); }
-
-// ── SNI Scanner ──
-var SCN_SNI_STOP = false;
-
-function scnSwitchSni(which) {
-  // Placeholder — all sni sub-tabs use the same pane
-}
-
-async function scnRunSingleSni() {
-  var sni = ($id('scn-sni-input').value || '').trim();
-  if (!sni) { toast('SNI را وارد کنید', 'err'); return; }
-  SCN_SNI_STOP = false;
-  try { await api('/api/scanner/sni-clear-results', {method: 'POST'}); } catch(e) {}
-  var list = $id('scn-sni-list');
-  list.innerHTML = '<div class="scn-empty">در حال تست...</div>';
-  $id('scn-sni-tried').textContent = '۰';
-  $id('scn-sni-found').textContent = '۰';
-  $id('scn-sni-best').textContent = '--';
-  $id('scn-sni-bar').style.width = '0%';
-  try {
-    var r = await scnPingBatch([sni + ':443'], 2.0);
-    var results = r.results || [];
-    var ok = results.filter(function(x) { return x.ok; });
-    $id('scn-sni-tried').textContent = '۱';
-    $id('scn-sni-found').textContent = ok.length;
-    $id('scn-sni-best').textContent = ok.length ? ok[0].latency_ms + 'ms' : '--';
-    $id('scn-sni-bar').style.width = '100%';
-    var rows = '';
-    results.forEach(function(x) {
-      rows += '<div class="scn-item"><span class="scn-ip">' + esc(x.target) + '</span>' +
-        (x.ok ? '<span class="scn-ms good">' + x.latency_ms + 'ms</span>' : '<span class="scn-ms bad">✗</span>') + '</div>';
-    });
-    list.innerHTML = rows || '<div class="scn-empty">نتیجه‌ای یافت نشد</div>';
-    if (ok.length) {
-      await api('/api/scanner/sni-save-results', {method: 'POST', body: {results: [{sni: sni, latency_ms: ok[0].latency_ms}], top: 3}});
-      scnLoadSniResults();
-    }
-  } catch(e) { list.innerHTML = '<div class="scn-empty">خطا: ' + esc(e.message) + '</div>'; }
-}
-
-async function scnRunAutoSni() {
-  SCN_SNI_STOP = false;
-  var btn = $id('scn-sni-auto-btn');
-  var list = $id('scn-sni-list');
-  var savedEl = $id('scn-sni-results');
-  if (btn) { btn.disabled = true; btn.textContent = 'در حال اسکن...'; }
-  if (list) list.innerHTML = '<div class="scn-empty">در حال دریافت لیست SNI...</div>';
-  if (savedEl) savedEl.innerHTML = '<span class="scn-empty">در حال اسکن...</span>';
-  $id('scn-sni-tried').textContent = '۰';
-  $id('scn-sni-found').textContent = '۰';
-  $id('scn-sni-best').textContent = '--';
-  $id('scn-sni-bar').style.width = '0%';
-
-  try {
-    // Clear previous results before the new run, but do not wait for any
-    // scanner work. This keeps the UI responsive from the first frame.
-    try { await api('/api/scanner/sni-clear-results', {method:'POST'}); } catch (_) {}
-    var sr = await api('/api/scanner/sni-scan-list');
-    var snis = Array.isArray(sr.snis) ? sr.snis.map(function(x){ return String(x).trim(); }).filter(Boolean) : [];
-    if (!snis.length) {
-      if (list) list.innerHTML = '<div class="scn-empty">لیست SNI خالی است</div>';
-      if (btn) { btn.disabled = false; btn.textContent = 'Auto Scan'; }
-      return;
-    }
-
-    var total = snis.length, tried = 0, found = 0;
-    var live = [];
-    var active = 0, next = 0;
-    var CONCURRENCY = 4;
-
-    function renderLive() {
-      var ordered = live.slice().sort(function(a,b){ return a.latency_ms - b.latency_ms; });
-      if ($id('scn-sni-tried')) $id('scn-sni-tried').textContent = toFa(tried);
-      if ($id('scn-sni-found')) $id('scn-sni-found').textContent = toFa(found);
-      if ($id('scn-sni-best')) $id('scn-sni-best').textContent = ordered.length ? Math.round(ordered[0].latency_ms) + 'ms' : '--';
-      if ($id('scn-sni-bar')) $id('scn-sni-bar').style.width = Math.round((tried / total) * 100) + '%';
-      if (list) {
-        var rows = ordered.slice(0, 20).map(function(x) {
-          return '<div class="scn-item"><span class="scn-ip">' + esc(x.sni) + '</span><span class="scn-ms good">' + Math.round(x.latency_ms) + 'ms</span></div>';
-        }).join('');
-        list.innerHTML = rows || '<div class="scn-empty">در حال اسکن...</div>';
-      }
-      var top3 = ordered.slice(0,3).map(function(x){ return {sni:x.sni, latency_ms:Math.round(x.latency_ms)}; });
-      if (top3.length) {
-        // Save on every improvement. The file therefore follows the live UI.
-        api('/api/scanner/sni-save-results', {method:'POST', body:{results:top3, top:3}})
-          .then(function(){ scnLoadSniResults(); }).catch(function(){});
-      }
-    }
-
-    return new Promise(function(resolve) {
-      function launch() {
-        if (SCN_SNI_STOP || next >= total) {
-          if (active === 0) resolve();
-          return;
-        }
-        while (!SCN_SNI_STOP && active < CONCURRENCY && next < total) {
-          (function(sni) {
-            next++; active++;
-            api('/api/scanner/sni-check?host=' + encodeURIComponent(sni))
-              .then(function(r) {
-                tried++;
-                if (r && r.ok) {
-                  found++;
-                  live.push({sni:sni, latency_ms:Number(r.latency_ms || 0)});
-                  live.sort(function(a,b){return a.latency_ms-b.latency_ms;});
-                  live = live.slice(0, 20);
-                }
-                renderLive();
-              })
-              .catch(function(){ tried++; renderLive(); })
-              .finally(function(){
-                active--;
-                if (next >= total && active === 0) resolve(); else launch();
-              });
-          })(snis[next]);
-        }
-      }
-      launch();
-    });
-
-  } catch (e) {
-    if (list) list.innerHTML = '<div class="scn-empty">خطا: ' + esc(e.message || String(e)) + '</div>';
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Auto Scan'; }
-    scnLoadSniResults();
-  }
-}
-function scnStopSni() { SCN_SNI_STOP = true; toast(t('scanStopped'), 'warn'); }
-
-async function scnLoadSniResults() {
-  try {
-    var r = await api('/api/scanner/sni-results');
-    var results = r.results || [];
-    var el = $id('scn-sni-results');
-    if (!el) return;
-    if (!results.length) { el.innerHTML = '<span class="scn-empty">هنوز ذخیره‌ای نیست</span>'; return; }
-    el.innerHTML = results.map(function(x) {
-      return '<span class="scn-tag">' + esc(x.sni) + ' <small>(' + x.latency_ms + 'ms)</small></span>';
-    }).join('');
-  } catch(e) { console.error(e); }
-}
-
-async function snPickFastest() {
-  try {
-    var r = await api('/api/scanner/sni-fastest');
-    if (r.ok && r.sni) {
-      $id('ib-sni').value = r.sni;
-      toast('سریع‌ترین SNI: ' + r.sni + ' (' + r.latency_ms + 'ms)', 'ok');
-    } else {
-      toast('هنوز SNI ذخیره نشده — ابتدا اسکن کنید', 'warn');
-    }
-  } catch(e) { toast('خطا در دریافت SNI', 'err'); }
-}
 
 // ── TCP tab ──
 var scnDomains = SCN_DOM_DEFAULTS.slice();
@@ -3490,10 +2964,6 @@ async function spfRunIpScan() {
 
 async function spfRunSniScan() {
   if (spfCtx.sni.running) return;
-  if (!SPF_SNI_LIST.length) {
-    try { var sr = await api('/api/scanner/sni-list'); SPF_SNI_LIST = sr.sni_list || []; } catch(e) {}
-  }
-  if (!SPF_SNI_LIST.length) { toast('لیست SNI خالی است', 'err'); return; }
   spfCtx.sni.running = true;
   spfCtx.sni.found = [];
   spfCtx.sni.tried = 0;
@@ -3853,12 +3323,13 @@ function wkDeleteSelected() {
 
 async function workerSetup() {
   var token = ($id('wk-token').value || '').trim();
-  if (!token) { toast('Token is required', 'err'); return; }
+  var account = ($id('wk-account').value || '').trim();
+  if (!token || !account) { toast(t('workerFillAll'), 'err'); return; }
   var btn = null;
   document.querySelectorAll('#worker-setup .btn-p').forEach(function(b){ btn = b; });
   if (btn) { btn.disabled = true; btn.textContent = t('connecting'); }
   try {
-    var w = await api('/api/worker/setup', {method: 'POST', body: {token: token}});
+    var w = await api('/api/worker/setup', {method: 'POST', body: {token: token, account_id: account}});
     $id('wk-token').value = '';
     toast(t('workerConnected'), 'ok');
     await loadWorker();
@@ -3968,8 +3439,6 @@ function cuWorkerProxies() { return (WK_STATE && WK_STATE.proxies) || cuWorkerPr
 function cuInboundType(ib) {
   var p = (ib && ib.protocol || '').toLowerCase();
   if (p === 'worker') return 'worker';
-  if (p === 'wireguard') return 'wireguard';
-  if (p === 'telegram') return 'telegram';
   if (p === 'reality' || (ib && ib.security || '').toLowerCase() === 'reality') return 'reality';
   return 'tls';
 }
@@ -3991,7 +3460,6 @@ function cuToggleIpSwitch(ibId, el) {
 }
 
 function cuPickWorkerCountries(ibId, el) {
-  el.classList.toggle('selected');
   var arr = cuInboundState.countries[ibId] = cuInboundState.countries[ibId] || {};
   arr.worker = arr.worker || [];
   var code = el.getAttribute('data-code');
@@ -4001,6 +3469,7 @@ function cuPickWorkerCountries(ibId, el) {
   } else {
     if (idx !== -1) arr.worker.splice(idx, 1);
   }
+  // No selected countries → no worker configs generated for this inbound.
 }
 
 function cuCustomStates() {
@@ -4060,20 +3529,12 @@ function cuRenderInboundOpts() {
           '<span class="set-lbl" style="font-size:11px">' + t('addCfIps') + '</span>' +
           '<button type="button" class="ios-switch' + (sel.cf ? ' on' : '') + '" data-type="cf" onclick="cuToggleIpSwitch(\'' + esc(id) + '\',this)"></button>' +
         '</div>';
-      } else if (type === 'tls' && (ib.protocol || '').toLowerCase() === 'vless' && !String(id).toLowerCase().startsWith('default')) {
-        var selt = cuInboundState.countries[id] || {};
-        html += '<div class="set-row" style="padding:0;border:none"><span class="set-lbl" style="font-size:11px">Cloudflare IP</span>' +
-          '<button type="button" class="ios-switch' + (selt.cf ? ' on' : '') + '" data-type="cf" onclick="cuToggleIpSwitch(\'' + esc(id) + '\',this)"></button></div>' +
-          '<div class="set-row" style="padding:0;border:none"><span class="set-lbl" style="font-size:11px">Railway IP</span>' +
-          '<button type="button" class="ios-switch' + (selt.railway ? ' on' : '') + '" data-type="railway" onclick="cuToggleIpSwitch(\'' + esc(id) + '\',this)"></button></div>';
       } else if (type === 'tls') {
-        var selt2 = cuInboundState.countries[id] || {};
-        html += '<div class="set-row" style="padding:0;border:none"><span class="set-lbl" style="font-size:11px">' + t('addRailwayIps') + '</span>' +
-          '<button type="button" class="ios-switch' + (selt2.railway ? ' on' : '') + '" data-type="railway" onclick="cuToggleIpSwitch(\'' + esc(id) + '\',this)"></button></div>';
-      } else if (type === 'wireguard') {
-        html += '<div class="px-hint" style="margin:0">WireGuard — نیازی به IP اضافی نیست</div>';
-      } else if (type === 'telegram') {
-        html += '<div class="px-hint" style="margin:0">Telegram Proxy — نیازی به IP اضافی نیست</div>';
+        var selt = cuInboundState.countries[id] || {};
+        html += '<div class="set-row" style="padding:0;border:none">' +
+          '<span class="set-lbl" style="font-size:11px">' + t('addRailwayIps') + '</span>' +
+          '<button type="button" class="ios-switch' + (selt.railway ? ' on' : '') + '" data-type="railway" onclick="cuToggleIpSwitch(\'' + esc(id) + '\',this)"></button>' +
+        '</div>';
       } else {
         html += '<div class="px-hint" style="margin:0">' + t('realityNoExtra') + '</div>';
       }

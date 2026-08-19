@@ -20,7 +20,6 @@ from collections import deque, defaultdict
 import base64
 import io
 import logging
-import ssl
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("Spider-Gateway")
@@ -176,31 +175,6 @@ async def load_state():
                 SETTINGS.update(data["settings"])
             GROUPS.update(data.get("groups", {}))
             INBOUNDS.update(data.get("inbounds", {}))
-            # Telegram Proxy has no SNI / Destination / Server Name fields.
-            # Remove legacy values from older saved inbounds and normalize its
-            # settings to the three supported fields only.
-            _tg_migrated = False
-            for _iid, _ib in INBOUNDS.items():
-                if (_ib.get("protocol") or "").lower() != "telegram":
-                    continue
-                for _k in ("sni", "destination", "server_name"):
-                    if _ib.get(_k):
-                        _ib[_k] = ""
-                        _tg_migrated = True
-                _tg = _ib.setdefault("telegram_settings", {})
-                _clean_tg = {
-                    "internal_port": int(_tg.get("internal_port") or _ib.get("port") or 44344),
-                    "external_port": int(_tg.get("external_port") or _ib.get("external_port") or 443),
-                    "external_domain": str(_tg.get("external_domain") or _ib.get("external_domain") or "").strip(),
-                }
-                if _tg != _clean_tg:
-                    _ib["telegram_settings"] = _clean_tg
-                    _tg_migrated = True
-                _ib["port"] = _clean_tg["internal_port"]
-                _ib["external_port"] = _clean_tg["external_port"]
-                _ib["external_domain"] = _clean_tg["external_domain"]
-            if _tg_migrated:
-                asyncio.create_task(save_state())
             IP_POOL.clear()
             IP_POOL.extend(data.get("ip_pool", []))
             IP_BLACKLIST.clear()
@@ -1326,75 +1300,19 @@ async def _start_all_telegram_proxies():
 
 
 async def _start_telegram_proxy(inbound_id: str, inbound: dict):
-    """Start or restart a Telegram proxy server for a Telegram inbound.
-    Uses Docker with the official telegrammessenger/proxy image if available,
-    otherwise falls back to built-in Python MTProto proxy.
+    """Start one MTProto listener on the inbound internal port.
+
+    The built-in implementation is used because a single listener must accept
+    all user secrets assigned to this inbound; spawning one Docker process per
+    user would require different host ports. The listener therefore belongs to
+    the Telegram inbound itself, while credentials remain per-user.
     """
-    from telegram_proxy import derive_secret_from_uuid, is_docker_available, run_docker_telegram_proxy
-
-    # Stop existing instance if any
-    await _stop_telegram_proxy(inbound_id)
-
-    tg = inbound.get("telegram_settings") or {}
-    int_port = int(tg.get("internal_port") or inbound.get("port") or 44344)
-    external_domain = tg.get("external_domain") or inbound.get("external_domain") or ""
-    external_port = tg.get("external_port") or inbound.get("external_port") or "443"
-
-    # Build secrets map: secret_hex -> {user_id, config_uuid, label}
-    secrets_map = {}
-    async with USERS_LOCK:
-        for uid, u in USERS.items():
-            iids = u.get("inbound_ids") or []
-            if inbound_id in iids:
-                config_uuid = u.get("config_uuid", uid)
-                secret = u.get("telegram_secret") or derive_secret_from_uuid(config_uuid)
-                # Store the derived secret on the user if not already set
-                if not u.get("telegram_secret"):
-                    u["telegram_secret"] = secret
-                secrets_map[secret] = {
-                    "user_id": uid,
-                    "config_uuid": config_uuid,
-                    "label": u.get("username", uid),
-                }
-
-    # Generate container name
-    container_name = f"spider-tg-proxy-{inbound_id}"
-
-    # Determine domain for the proxy
-    domain = external_domain or inbound.get("external_domain") or ""
-
-    # Try Docker first if available
-    docker_started = False
-    if is_docker_available():
-        # For Docker, we use the internal port as the container's exposed port
-        # The Docker image runs on port 443 internally, mapped to int_port on host
-        for secret in secrets_map:
-            success = await run_docker_telegram_proxy(
-                container_name=f"spider-tg-proxy-{inbound_id}-{secret[:8]}",
-                port=int_port,
-                secret=secret,
-                domain="",
-            )
-            if success:
-                docker_started = True
-                break
-
-    if docker_started:
-        log_activity("telegram-proxy", f"Telegram Proxy (Docker) started on port {int_port}", "ok")
-        return
-
-    # Fallback to built-in Python MTProto proxy
     from telegram_proxy import MTProtoProxyServer, derive_secret_from_uuid
 
+    await _stop_telegram_proxy(inbound_id)
+    tg = inbound.get("telegram_settings") or {}
     int_port = int(tg.get("internal_port") or inbound.get("port") or 44344)
 
-    # Telegram Proxy does not use SNI, Destination or Server Name.
-    server = MTProtoProxyServer(
-        inbound_id=inbound_id,
-        port=int_port,
-    )
-
-    # Build secrets map: secret_hex -> {user_id, config_uuid, label}
     secrets_map = {}
     async with USERS_LOCK:
         for uid, u in USERS.items():
@@ -1402,29 +1320,23 @@ async def _start_telegram_proxy(inbound_id: str, inbound: dict):
             if inbound_id in iids:
                 config_uuid = u.get("config_uuid", uid)
                 secret = u.get("telegram_secret") or derive_secret_from_uuid(config_uuid)
-                # Store the derived secret on the user if not already set
                 if not u.get("telegram_secret"):
                     u["telegram_secret"] = secret
-                secrets_map[secret] = {
-                    "user_id": uid,
-                    "config_uuid": config_uuid,
-                    "label": u.get("username", uid),
-                }
+                secrets_map[secret] = {"user_id": uid, "config_uuid": config_uuid, "label": u.get("username", uid)}
 
+    server = MTProtoProxyServer(inbound_id=inbound_id, port=int_port)
     server.update_secrets(secrets_map)
 
-    # Traffic callback: sync back to user record
     def on_traffic(user_id: str, nbytes: int):
         asyncio.create_task(_sync_tg_traffic(user_id, nbytes))
-
     server.on_traffic = on_traffic
 
     try:
         await server.start()
         TG_PROXY_INSTANCES[inbound_id] = server
-        log_activity("telegram-proxy", f"Telegram Proxy (Python) started on port {int_port}", "ok")
+        log_activity("telegram-proxy", f"Telegram MTProto listening on internal port {int_port}", "ok")
     except Exception as e:
-        logger.error(f"Failed to start TG proxy for {inbound_id}: {e}")
+        logger.error(f"Failed to start Telegram MTProto for {inbound_id}: {e}")
 
 
 async def _stop_telegram_proxy(inbound_id: str):
@@ -2208,11 +2120,15 @@ async def subscription_handler(identifier: str, request: Request):
                     target_uid = uid
                     break
         if target_user:
+            if _user_uses_worker_inbound(target_user):
+                target_user = await _worker_pull_user(target_uid, target_user)
+                USERS[target_uid] = target_user
             host = SETTINGS.get("domain") or get_host()
             username = target_user.get("username", target_uid)
 
-            # Build ALL configs for this user (same logic as /api/sub/)
-            configs = []
+            # Build ALL configs for this user. Worker publishes its own standalone
+            # configs; use those exact configs when available.
+            configs = list(target_user.get("worker_configs") or [])
             inbound_ids = target_user.get("inbound_ids") or []
             stored_path_user = (target_user.get("path") or "").strip()
             for iid_ in inbound_ids:
@@ -2224,7 +2140,8 @@ async def subscription_handler(identifier: str, request: Request):
                         if not str(ib.get("external_domain") or "").strip() or not str(ib.get("external_port") or "").strip():
                             continue
                     if ib and _p == "worker":
-                        configs.extend(_worker_configs(target_uid, target_user, ib, stored_path_user, f"Spider-{username}"))
+                        if not target_user.get("worker_configs"):
+                            configs.extend(_worker_configs(target_uid, target_user, ib, stored_path_user, f"Spider-{username}"))
                     else:
                         cfg = generate_user_config(target_uid, target_user, iid_)
                         if cfg:
@@ -2498,13 +2415,11 @@ async def get_stats(_=Depends(require_auth)):
     active_users = sum(1 for u in snap_users.values() if u.get("status") == "active")
     total_users = len(snap_users)
 
-    # Real traffic comes from per-user counters (the persisted source of truth).
-    # Fall back to HTTP proxy bytes only when no user traffic has been recorded.
-    user_traffic_bytes = sum(int(u.get("traffic_used_bytes") or 0) for u in snap_users.values())
-    total_bytes = max(user_traffic_bytes, int(stats.get("total_bytes") or 0))
-    traffic_usage_gb = round(total_bytes / (1024 ** 3), 6)
+    # Traffic across all links
+    total_bytes = stats["total_bytes"]
+    traffic_usage_gb = round(total_bytes / (1024 ** 3), 3)
 
-    # Live connection count is the actual number of active relay sessions.
+    # Connection-based health simulation
     conn_count = len(connections)
     if conn_count > 400:
         server_status = "down"
@@ -2829,12 +2744,6 @@ async def create_inbound(request: Request, _=Depends(require_auth)):
     # deployed Cloudflare Worker domain (address/host/sni = worker_domain) and
     # optionally carries the BPB snispoofing params. The worker domain is pulled
     # automatically from the connected worker — no manual entry needed.
-    domain = str(body.get("domain") or "").strip()
-    external_domain = str(body.get("external_domain") or "").strip()
-    sni = str(body.get("sni") or "").strip()
-    destination = str(body.get("destination") or "").strip()
-    server_name = str(body.get("server_name") or "").strip()
-
     if protocol == "worker":
         wdom = _worker_safe_domain(WORKER.get("worker_domain"))
         if not wdom:
@@ -2844,26 +2753,21 @@ async def create_inbound(request: Request, _=Depends(require_auth)):
         domain = wdom
         external_domain = wdom
         sni = wdom
+        if not external_port:
+            external_port = 443
+    domain = str(body.get("domain") or "").strip()
+    external_domain = str(body.get("external_domain") or "").strip()
+    sni = str(body.get("sni") or "").strip()
+    destination = str(body.get("destination") or "").strip()
+    server_name = str(body.get("server_name") or "").strip()
 
-    # For WireGuard and Telegram, port is not required (they use internal_port in settings)
-    if protocol in ("wireguard", "telegram"):
-        if protocol == "telegram":
-            # Telegram Proxy has only Internal Port, External Port and External Domain.
-            # Never persist/use SNI, Destination or Server Name for Telegram.
-            sni = ""
-            destination = ""
-            server_name = ""
-            telegram_settings = {
-                "internal_port": int(telegram_settings.get("internal_port") or body.get("port") or 44344),
-                "external_port": int(telegram_settings.get("external_port") or body.get("external_port") or 443),
-                "external_domain": str(telegram_settings.get("external_domain") or external_domain or "").strip(),
-            }
-            external_domain = telegram_settings["external_domain"]
-            external_port = telegram_settings["external_port"]
-            port = telegram_settings["internal_port"]
-        else:
-            port = 0
-            external_port = 0
+    # Telegram uses the explicit internal listener from telegram_settings.
+    if protocol == "telegram":
+        port = int(body.get("port") or 0)
+        external_port = int(body.get("external_port") or 443)
+    elif protocol == "wireguard":
+        port = 0
+        external_port = 0
     else:
         port = int(body.get("port") or 443)
         external_port = int(body.get("external_port") or 443)
@@ -2876,6 +2780,19 @@ async def create_inbound(request: Request, _=Depends(require_auth)):
     grpc_settings = body.get("grpc_settings", {}) if isinstance(body.get("grpc_settings"), dict) else {}
     wireguard_settings = body.get("wireguard_settings", {}) if isinstance(body.get("wireguard_settings"), dict) else {}
     telegram_settings = body.get("telegram_settings", {}) if isinstance(body.get("telegram_settings"), dict) else {}
+    if protocol == "telegram":
+        # Telegram Proxy does not use Xray Reality fields.
+        sni = ""
+        destination = ""
+        server_name = ""
+        telegram_settings = {
+            "internal_port": int(telegram_settings.get("internal_port") or port or 44344),
+            "external_port": int(telegram_settings.get("external_port") or external_port or 443),
+            "external_domain": str(telegram_settings.get("external_domain") or external_domain or "").strip(),
+        }
+        port = telegram_settings["internal_port"]
+        external_port = telegram_settings["external_port"]
+        external_domain = telegram_settings["external_domain"]
 
     # Auto-generate Reality keys (x25519 pbk/priv + short_id + mldsa65 seed)
     # fresh for every reality inbound. SNI target is fixed.
@@ -2907,8 +2824,8 @@ async def create_inbound(request: Request, _=Depends(require_auth)):
         # The panel domain is used via SETTINGS["domain"] in generate_user_config
         external_domain = ""
         external_port = ""
-    # For WireGuard and Telegram, port is set to 0 (not used as listen port)
-    if protocol in ("wireguard", "telegram"):
+    # WireGuard has no TCP listener here; Telegram keeps its real internal listener port.
+    if protocol == "wireguard":
         port = 0
         external_port = 0
 
@@ -3026,23 +2943,22 @@ async def update_inbound(inbound_id: str, request: Request, _=Depends(require_au
             ib["wireguard_settings"] = body["wireguard_settings"]
         if "telegram_settings" in body and isinstance(body["telegram_settings"], dict):
             ib["telegram_settings"] = body["telegram_settings"]
+        if (ib.get("protocol") or "").lower() == "telegram":
+            tg = ib.setdefault("telegram_settings", {})
+            # Telegram never exposes/stores SNI, Destination or Server Name.
+            ib["sni"] = ""
+            ib["destination"] = ""
+            ib["server_name"] = ""
+            tg["internal_port"] = int((body.get("telegram_settings") or {}).get("internal_port") or body.get("port") or tg.get("internal_port") or ib.get("port") or 44344)
+            tg["external_port"] = int((body.get("telegram_settings") or {}).get("external_port") or body.get("external_port") or tg.get("external_port") or ib.get("external_port") or 443)
+            tg["external_domain"] = str((body.get("telegram_settings") or {}).get("external_domain") or body.get("external_domain") or tg.get("external_domain") or ib.get("external_domain") or "").strip()
+            ib["port"] = tg["internal_port"]
+            ib["external_port"] = tg["external_port"]
+            ib["external_domain"] = tg["external_domain"]
         if "destination" in body:
             ib["destination"] = str(body["destination"]).strip()
         if "server_name" in body:
             ib["server_name"] = str(body["server_name"]).strip()
-
-        # Telegram Proxy intentionally has no SNI / Destination / Server Name.
-        if (ib.get("protocol") or "").lower() == "telegram":
-            ib["sni"] = ""
-            ib["destination"] = ""
-            ib["server_name"] = ""
-            tg = ib.setdefault("telegram_settings", {})
-            tg["internal_port"] = int(tg.get("internal_port") or ib.get("port") or 44344)
-            tg["external_port"] = int(tg.get("external_port") or ib.get("external_port") or 443)
-            tg["external_domain"] = str(tg.get("external_domain") or ib.get("external_domain") or "").strip()
-            ib["port"] = tg["internal_port"]
-            ib["external_port"] = tg["external_port"]
-            ib["external_domain"] = tg["external_domain"]
     await save_state()
     log_activity("inbound", f"اینباند «{ib.get('name', inbound_id)}» ویرایش شد", "info")
     asyncio.create_task(_xray_apply())
@@ -3833,6 +3749,12 @@ async def api_user_sub(username: str):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    if _user_uses_worker_inbound(user):
+        user = await _worker_pull_user(user.get("user_id"), user)
+        async with USERS_LOCK:
+            if user.get("user_id") in USERS:
+                USERS[user.get("user_id")].update(user)
+
     # Even inactive users get their sub page (just show status)
     status = user.get("status", "active")
 
@@ -3963,6 +3885,8 @@ async def api_user_sub(username: str):
         "vless_link": config,
         "config": config,
         "configs": configs,
+        "worker_configs": list(user.get("worker_configs") or []),
+        "worker_countries": list(user.get("worker_countries") or user.get("proxy_countries") or []),
         "inbound_ids": inbound_ids,
         "sni": user.get("sni", ""),
         "path": user.get("path", ""),
@@ -4559,9 +4483,8 @@ def get_live_stats() -> dict:
         net_recv_mb = 0
         network_mbps = 2.5
     # Calculate total traffic from all users
-    total_used = sum(int(u.get("traffic_used_bytes") or 0) for u in USERS.values())
-    total_limit = sum(int(u.get("traffic_limit_bytes") or 0) for u in USERS.values())
-    total_used = max(total_used, int(stats.get("total_bytes") or 0))
+    total_used = sum(u.get("traffic_used_bytes", 0) for u in USERS.values())
+    total_limit = sum(u.get("traffic_limit_bytes", 0) for u in USERS.values())
     return {
         "cpu_percent": max(0, cpu_pct),
         "ram_percent": max(0, ram_pct),
@@ -4570,15 +4493,13 @@ def get_live_stats() -> dict:
         "disk_percent": max(0, disk_pct),
         "disk_used_gb": disk_used_gb,
         "disk_total_gb": disk_total_gb,
-        "server_status": ("down" if cpu_pct >= 98 or ram_pct >= 98 or disk_pct >= 99 else "degraded" if cpu_pct >= 85 or ram_pct >= 90 or disk_pct >= 95 else "healthy"),
         "network_mbps": network_mbps,
         "net_sent_mb": net_sent_mb,
         "net_recv_mb": net_recv_mb,
         "active_connections": conn_count,
         "ws_connections": ws_client_count,
-        "active_users": sum(1 for u in USERS.values() if u.get("status") == "active"),
         "total_users": len(USERS),
-        "total_traffic_used_tb": round(total_used / (1024**4), 6),
+        "total_traffic_used_tb": round(total_used / (1024**4), 3),
         "total_traffic_limit_tb": round(total_limit / (1024**4), 3) if total_limit > 0 else 0,
         "uptime": uptime(),
         "uptime_seconds": uptime_secs(),
@@ -6021,8 +5942,10 @@ async def _worker_deploy() -> tuple:
     panel_domain = _safe_host(SETTINGS.get("domain"), get_host())
     async with WORKER_LOCK:
         WORKER["panel_domain"] = panel_domain
+    worker_domain = _worker_safe_domain(WORKER.get("worker_domain"))
     script = (template
               .replace("__PANEL_DOMAIN__", json.dumps(panel_domain))
+              .replace("__WORKER_DOMAIN__", json.dumps(worker_domain))
               .replace("__PANEL_TOKEN__", json.dumps(ctrl)))
     cf_token = str(WORKER.get("token") or "")
     if not cf_token:
@@ -6078,26 +6001,6 @@ async def _worker_deploy() -> tuple:
         return 0, {"errors": [{"message": str(e)}]}
 
 
-async def _worker_enable_workers_dev() -> dict:
-    """Ensure the deployed script is published on its workers.dev hostname.
-
-    Cloudflare exposes the workers.dev route as a separate script subdomain
-    setting; a successful script upload alone does not guarantee that the URL
-    is enabled.
-    """
-    acct = str(WORKER.get("account_id") or "")
-    name = str(WORKER.get("worker_name") or "")
-    token = str(WORKER.get("token") or "")
-    email = str(WORKER.get("cf_email") or "")
-    if not acct or not name or not token:
-        return {"ok": False, "detail": "worker credentials missing"}
-    code, data = await _cf_api(
-        "POST", f"/accounts/{acct}/workers/scripts/{name}/subdomain", token,
-        {"enabled": True, "previews_enabled": False}, email=email,
-    )
-    return {"ok": code == 200 and bool(data.get("success")), "status": code, "data": data}
-
-
 async def _worker_sync_users() -> dict:
     """Push all panel users (with volume + expiry) to the worker's KV store.
 
@@ -6151,13 +6054,66 @@ async def _worker_sync_users() -> dict:
                             "used_bytes": int(u.get("traffic_used_bytes") or 0),
                             "proxy_ip": "",
                             "concurrent_connections": int(u.get("concurrent_connections") or 0),
+                            "countries": list(u.get("proxy_countries") or ([u.get("proxy_country")] if u.get("proxy_country") else [])),
                         },
                     )
                 if r.status_code in (200, 204):
+                    if r.status_code == 200:
+                        try:
+                            payload = r.json().get("user") or {}
+                            if payload.get("configs") is not None:
+                                u["worker_configs"] = payload.get("configs") or []
+                            if payload.get("used_bytes") is not None:
+                                u["traffic_used_bytes"] = int(payload.get("used_bytes") or 0)
+                        except Exception:
+                            pass
                     synced += 1
             except Exception as e:
                 logger.warning(f"worker user sync failed for {uid}: {e}")
     return {"ok": True, "count": synced}
+
+
+async def _worker_pull_user(uid: str, u: dict) -> dict:
+    """Pull usage/expiry/country and worker-generated config metadata back from Worker."""
+    domain = str(WORKER.get("worker_domain") or "").strip().lower()
+    ctrl = str(WORKER.get("control_token") or "")
+    cuuid = u.get("config_uuid") or uid
+    if not domain or not ctrl or not cuuid:
+        return u
+    try:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+            r = await client.get(f"https://{domain}/api/user/{cuuid}", headers={"Authorization": f"Bearer {ctrl}"})
+        if r.status_code != 200:
+            return u
+        data = r.json().get("user") or {}
+        if "used_bytes" in data:
+            u["traffic_used_bytes"] = int(data.get("used_bytes") or 0)
+        if data.get("expire"):
+            u["worker_expire"] = int(data.get("expire"))
+        if isinstance(data.get("countries"), list):
+            u["worker_countries"] = list(data.get("countries"))
+        if isinstance(data.get("configs"), list):
+            u["worker_configs"] = list(data.get("configs"))
+        return u
+    except Exception as e:
+        logger.warning(f"worker pull failed for {uid}: {e}")
+        return u
+
+async def _worker_pull_all_users() -> int:
+    count = 0
+    async with USERS_LOCK:
+        targets = [(uid, u) for uid, u in USERS.items() if _user_uses_worker_inbound(u)]
+    for uid, u in targets:
+        before = u.get("traffic_used_bytes")
+        out = await _worker_pull_user(uid, u)
+        if out is not u:
+            async with USERS_LOCK:
+                USERS[uid].update(out)
+        if out.get("traffic_used_bytes") != before or out.get("worker_configs") is not None:
+            count += 1
+    if count:
+        asyncio.create_task(save_state())
+    return count
 
 
 def _user_uses_worker_inbound(u: dict) -> bool:
@@ -6234,20 +6190,6 @@ async def _worker_control_update() -> dict:
             )
         if r.status_code == 200:
             return {"ok": True, "detail": "worker updated"}
-        if r.status_code == 404:
-            # A 404 here almost always means the workers.dev hostname is not
-            # serving the newly deployed script yet. Re-publish and retry once.
-            await _worker_enable_workers_dev()
-            await asyncio.sleep(0.5)
-            async with httpx.AsyncClient(timeout=20, follow_redirects=True) as retry_client:
-                rr = await retry_client.post(
-                    f"https://{domain}/api/proxies",
-                    headers={"Authorization": f"Bearer {ctrl}"},
-                    json={"locations": locations},
-                )
-            if rr.status_code == 200:
-                return {"ok": True, "detail": "worker updated after workers.dev retry"}
-            return {"ok": False, "detail": f"worker returned HTTP {rr.status_code}: {rr.text[:120]}"}
         return {"ok": False, "detail": f"worker returned HTTP {r.status_code}: {r.text[:120]}"}
     except Exception as e:
         return {"ok": False, "detail": str(e)}
@@ -6478,8 +6420,6 @@ async def worker_setup(request: Request, _=Depends(require_auth)):
             "last_error": "",
         })
     sc, sd = await _worker_deploy()
-    # Explicitly enable the workers.dev route for this script.
-    await _worker_enable_workers_dev()
     if sc not in (200, 201, 409):
         msg = (sd.get("errors") or [{}])[0].get("message", "deploy failed")
         async with WORKER_LOCK:
@@ -6507,7 +6447,6 @@ async def worker_sync(_=Depends(require_auth)):
     if not WORKER.get("connected"):
         raise HTTPException(status_code=400, detail="worker is not connected")
     sc, sd = await _worker_deploy()
-    await _worker_enable_workers_dev()
     if sc in (200, 201, 409):
         await _worker_sync_users()
         await _ensure_worker_inbound()
@@ -6847,41 +6786,6 @@ def _read_sni_results() -> list:
     return out
 
 
-@app.get("/api/scanner/sni-check")
-async def scanner_sni_check(host: str, _=Depends(require_auth)):
-    """Live Reality-SNI TLS handshake check.
-
-    The browser should not directly fetch arbitrary SNI hosts because CORS,
-    mixed-content rules and certificate errors can make a reachable SNI look
-    dead.  The panel server performs a real TLS handshake with SNI and returns
-    the measured latency immediately for each host.
-    """
-    host = str(host or "").strip().lower()
-    # Basic hostname validation. Do not accept URLs, paths or arbitrary text.
-    if not host or len(host) > 253 or any(ch.isspace() for ch in host) or "/" in host:
-        raise HTTPException(status_code=400, detail="invalid SNI host")
-
-    started = time.perf_counter()
-    context = ssl.create_default_context()
-    context.check_hostname = False
-    context.verify_mode = ssl.CERT_NONE
-    try:
-        reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(host, 443, ssl=context, server_hostname=host),
-            timeout=2.5,
-        )
-        latency_ms = round((time.perf_counter() - started) * 1000, 2)
-        try:
-            writer.close()
-            await writer.wait_closed()
-        except Exception:
-            pass
-        return {"ok": True, "sni": host, "latency_ms": latency_ms}
-    except Exception as e:
-        latency_ms = round((time.perf_counter() - started) * 1000, 2)
-        return {"ok": False, "sni": host, "latency_ms": latency_ms, "error": str(e)[:160]}
-
-
 @app.get("/api/scanner/sni-scan-list")
 async def scanner_sni_scan_list(_=Depends(require_auth)):
     """Return the SNI list for scanning."""
@@ -6896,65 +6800,28 @@ async def scanner_sni_results(_=Depends(require_auth)):
     return {"ok": True, "results": results}
 
 
-@app.post("/api/scanner/sni-clear-results")
-async def scanner_sni_clear_results(_=Depends(require_auth)):
-    """Clear previously saved SNI scan results so a new run starts empty."""
-    try:
-        f = _sni_result_file()
-        f.parent.mkdir(parents=True, exist_ok=True)
-        f.write_text("# Fastest SNIs for Reality (live scanner)\n# Format: sni|latency_ms\n", encoding="utf-8")
-        return {"ok": True, "results": []}
-    except Exception as e:
-        logger.warning(f"Could not clear SNI results: {e}")
-        raise HTTPException(status_code=500, detail="could not clear SNI results")
-
-
 @app.post("/api/scanner/sni-save-results")
 async def scanner_sni_save_results(request: Request, _=Depends(require_auth)):
-    """Merge live SNI results into sni_reality.txt and keep the fastest 3."""
+    """Save the top N fastest SNIs to the results file."""
     body = await request.json()
-    incoming = body.get("results") or []
-    top_n = max(1, min(int(body.get("top") or 3), 10))
-    merged = {}
-
-    # Preserve existing successful results so concurrent live updates cannot
-    # overwrite a faster SNI with a slower result that arrived later.
-    for old in _read_sni_results():
-        sni = str(old.get("sni") or "").strip().lower()
-        try:
-            lat = float(old.get("latency_ms"))
-        except Exception:
-            continue
-        if sni and lat >= 0:
-            merged[sni] = lat
-
-    for r in incoming:
-        sni = str(r.get("sni") or "").strip().lower()
-        try:
-            lat = float(r.get("latency_ms"))
-        except Exception:
-            continue
-        if sni and lat >= 0 and (sni not in merged or lat < merged[sni]):
-            merged[sni] = lat
-
-    ordered = sorted(
-        ({"sni": sni, "latency_ms": round(lat, 2)} for sni, lat in merged.items()),
-        key=lambda x: x["latency_ms"],
-    )[:top_n]
+    results = body.get("results") or []
+    top_n = int(body.get("top") or 3)
+    # Sort by latency and take top N
+    results.sort(key=lambda r: r.get("latency_ms", 99999))
+    results = results[:top_n]
     try:
         f = _sni_result_file()
         f.parent.mkdir(parents=True, exist_ok=True)
-        lines = [
-            "# Fastest SNIs for Reality (live scanner)",
-            "# Format: sni|latency_ms",
-        ]
-        for r in ordered:
-            lines.append(f"{r['sni']}|{r['latency_ms']}")
+        lines = ["# Fastest SNIs for Reality (auto-populated by SNI scanner)", "# Format: sni|latency_ms"]
+        for r in results:
+            sni = r.get("sni", "")
+            lat = r.get("latency_ms", 0)
+            if sni:
+                lines.append(f"{sni}|{lat}")
         f.write_text("\n".join(lines) + "\n", encoding="utf-8")
     except Exception as e:
         logger.warning(f"Could not save SNI results: {e}")
-        raise HTTPException(status_code=500, detail="could not save SNI results")
-    return {"ok": True, "saved": len(ordered), "results": ordered}
+    return {"ok": True, "saved": len(results), "results": results}
 
 
 @app.get("/api/scanner/sni-fastest")
