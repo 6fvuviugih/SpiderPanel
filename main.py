@@ -5789,7 +5789,7 @@ async def scan_railway_ips(_=Depends(require_auth)):
 # ══════════════════════════════════════════════════════════════════════════════
 
 CF_API = "https://api.cloudflare.com/client/v4"
-CF_TOKEN_LINK = "https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_routes%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_kv_storage%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_r2%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22dns%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22zone%22%2C%22type%22%3A%22read%22%7D%5D&accountId=%2A&zoneId=all&name=spider-Token"
+CF_TOKEN_LINK = "https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22account_settings%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_kv_storage%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_routes%22%2C%22type%22%3A%22edit%22%7D%5D&accountId=%2A&zoneId=all&name=spider-Token"
 
 # Worker script deployed to the user's Cloudflare account lives in the project
 # at worker/_worker.js (NOT under /static, so it is never served to the web).
@@ -6360,22 +6360,22 @@ async def worker_setup(request: Request, _=Depends(require_auth)):
     Account ID is auto-detected from the token — no manual entry needed."""
     body = await request.json()
     token = str(body.get("token") or "").strip()
-    account_id = str(body.get("account_id") or "").strip()
-    email = os.environ.get("CF_EMAIL", "")
+    account_id = ""
+    email = ""
     if not token:
-        raise HTTPException(status_code=400, detail="token is required")
+        raise HTTPException(status_code=400, detail="Cloudflare API Token is required")
 
     # 1. Verify the API token.
     _is_gak = _is_cf_gak(token)
     verify_path = "/user/tokens/verify" if not _is_gak else "/user"
-    code, data = await _cf_api("GET", verify_path, token, email=email)
+    code, data = await _cf_api("GET", verify_path, token)
     if code != 200 or not data.get("success"):
         msg = (data.get("errors") or [{}])[0].get("message", "invalid token")
         raise HTTPException(status_code=400, detail=f"Cloudflare token rejected: {msg}")
 
     # 2. Auto-detect account_id if not provided (list accounts and pick the first one).
     if not account_id:
-        code_acc, data_acc = await _cf_api("GET", "/accounts", token, email=email)
+        code_acc, data_acc = await _cf_api("GET", "/accounts", token)
         if code_acc == 200 and data_acc.get("result"):
             accounts = data_acc["result"]
             if isinstance(accounts, list) and len(accounts) > 0:
@@ -6386,14 +6386,14 @@ async def worker_setup(request: Request, _=Depends(require_auth)):
     # 3. Discover the worker name + subdomain from the account.
     worker_name = str(body.get("worker_name") or "spider-proxy").strip()
     worker_domain = ""
-    code, data = await _cf_api("GET", f"/accounts/{account_id}/workers/subdomain", token, email=email)
+    code, data = await _cf_api("GET", f"/accounts/{account_id}/workers/subdomain", token)
     if code == 200 and data.get("result"):
         subdom = str(data["result"].get("subdomain") or "").strip()
         if subdom:
             worker_domain = _worker_safe_domain(f"{worker_name}.{subdom}.workers.dev")
     if not worker_domain:
         # Fallback: try to read the existing script's domain (if it was deployed before).
-        code2, data2 = await _cf_api("GET", f"/accounts/{account_id}/workers/scripts/{worker_name}", token, email=email)
+        code2, data2 = await _cf_api("GET", f"/accounts/{account_id}/workers/scripts/{worker_name}", token)
         if code2 in (200, 404):
             pass  # script check only; domain comes from subdomain above
     if not worker_domain:
