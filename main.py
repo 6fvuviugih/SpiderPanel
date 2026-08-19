@@ -2095,7 +2095,7 @@ def _worker_configs(user_id: str, user: dict, inbound: dict, stored_path: str, b
         flag = _code_to_flag(code) if code else ""
         clabel = str(p.get("country") or (code.upper() if code else "Worker"))
         rem = quote(f"Spider-{uname} {flag} {clabel}".strip() if flag else f"Spider-{uname} Worker")
-        wpath = f"/route/{code}" if code else (stored_path or "/")
+        wpath = f"/route/{code}" if code else f"/{cfg_uuid}"
 
         params = {
             "encryption": "none",
