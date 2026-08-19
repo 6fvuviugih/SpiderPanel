@@ -787,7 +787,7 @@ tr{animation:fadeIn .3s ease}
 .theme-dot.red{background:#ff1744}.theme-dot.green{background:#00ff41}.theme-dot.blue{background:#448aff}
 
 /* Contact Me bubbles */
-.contact-panel{text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px;justify-content:flex-start;min-height:auto}
+.contact-panel{text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}
 .contact-sub{font-size:12px;color:var(--txt2);margin-bottom:18px}
 .contact-bubbles{display:flex;gap:28px;justify-content:center;align-items:center;flex-wrap:wrap;padding:16px 0 8px}
 .contact-bubble{
@@ -878,6 +878,17 @@ tr{animation:fadeIn .3s ease}
 @media(max-width:900px){.sidebar-backdrop.show{display:block}}
 .sidebar-tog{display:none}@media(max-width:900px){.sidebar-tog{display:inline-flex!important}}
 
+</style>
+<style>
+/* FINAL UI FIXES */
+.tab-content{display:block;min-height:auto;margin:0;padding:0;}
+.tab-content.hidden{display:none !important;}
+#tab-worker,#tab-contact{display:block;min-height:auto;margin:0;padding:0;}
+#tab-worker.hidden,#tab-contact.hidden{display:none !important;}
+#tab-worker>.panel,#tab-contact>.panel{margin-top:0 !important;}
+.contact-panel{margin-top:0 !important;align-self:flex-start;}
+.sb-nav{flex:0 1 auto;justify-content:flex-start;gap:5px;padding:10px;}
+.nav-item{flex-shrink:0;}
 </style>
 </head>
 <body>
@@ -2755,7 +2766,7 @@ document.addEventListener('DOMContentLoaded', wireModalCloseButtons);
 wireModalCloseButtons();
 
 // ─── DOM Helper ───
-const $id = (id) => document.getElementById(id);
+// $id is defined once near the top of this script.
 
 // ─── Helpers ───
 function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
