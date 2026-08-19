@@ -173,25 +173,34 @@ async function connectToProxy(proxyIP) {
   const connector = getConnector();
   if (!connector || !proxyIP) return null;
 
-  const [host, portStr] = proxyIP.split(':');
-  const port = parseInt(portStr) || 443;
-
-  // Try TLS connection through the proxy (Cloudflare edge handles TLS termination)
-  try {
-    const sock = await connector({ hostname: host, port, tls: true, serverName: host });
-    if (sock && sock.readable && sock.writable) {
-      return { socket: sock, reader: sock.readable.getReader(), writer: sock.writable.getWriter() };
+  let host = String(proxyIP).trim();
+  let port = 443;
+  // Accept host:port without breaking bracketed IPv6 literals.
+  if (host.startsWith('[')) {
+    const close = host.indexOf(']');
+    if (close > 0) {
+      const rest = host.slice(close + 1);
+      if (rest.startsWith(':')) port = parseInt(rest.slice(1)) || 443;
+      host = host.slice(1, close);
     }
-  } catch (e) { /* TLS not supported on this proxy, try raw TCP */ }
+  } else {
+    const last = host.lastIndexOf(':');
+    if (last > -1 && host.indexOf(':') === last) {
+      port = parseInt(host.slice(last + 1)) || 443;
+      host = host.slice(0, last);
+    }
+  }
 
-  // Fallback: raw TCP to proxy (VLESS client sends TLS ClientHello through tunnel)
+  // IMPORTANT: the client already sent the VLESS payload (including the TLS
+  // ClientHello when security=tls). Do NOT start a second TLS session here.
+  // Raw TCP preserves the original TLS/SNI bytes and lets Cloudflare/edge proxy
+  // route them correctly.
   try {
     const sock = await connector({ hostname: host, port });
     if (sock && sock.readable && sock.writable) {
       return { socket: sock, reader: sock.readable.getReader(), writer: sock.writable.getWriter() };
     }
-  } catch (e) { /* proxy connect failed */ }
-
+  } catch (e) {}
   return null;
 }
 

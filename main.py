@@ -409,7 +409,6 @@ WORKER: dict = {
     "worker_url": "",
     "token": "",
     # Cloudflare auth email (for Global API Key auth: cfk_... tokens).
-    "cf_email": "",
     # Control token: a random secret baked into the deployed worker. The panel
     # uses it to call the worker's admin API (update proxy map, etc.) after
     # deploy — the worker only accepts calls carrying this Bearer token.
@@ -966,8 +965,8 @@ def generate_telegram_proxy_link(user_id: str, user: dict, inbound: dict, remark
     config_uuid = user.get("config_uuid", user_id)
     tg = inbound.get("telegram_settings") or {}
 
-    external_domain = tg.get("external_domain") or inbound.get("external_domain") or ""
-    external_port = tg.get("external_port") or inbound.get("external_port") or "443"
+    external_domain = str(tg.get("external_domain") or "").strip()
+    external_port = int(tg.get("external_port") or 443)
     if not external_domain:
         return ""
 
@@ -1105,6 +1104,21 @@ async def startup():
             }
             asyncio.create_task(save_state())
             log_activity("inbound", "اینباند پیش‌فرض Worker ساخته شد", "ok")
+
+    # Normalize existing Telegram inbounds: only internal/external Telegram fields
+    # are meaningful. Remove legacy SNI/Destination/Server Name state.
+    for _tg_ib in INBOUNDS.values():
+        if (_tg_ib.get("protocol") or "").lower() == "telegram":
+            _tg = _tg_ib.setdefault("telegram_settings", {})
+            _tg["internal_port"] = int(_tg.get("internal_port") or _tg_ib.get("port") or 44344)
+            _tg["external_port"] = int(_tg.get("external_port") or _tg_ib.get("external_port") or 443)
+            _tg["external_domain"] = str(_tg.get("external_domain") or _tg_ib.get("external_domain") or "").strip()
+            _tg_ib["port"] = _tg["internal_port"]
+            _tg_ib["external_port"] = _tg["external_port"]
+            _tg_ib["external_domain"] = _tg["external_domain"]
+            _tg_ib.pop("sni", None)
+            _tg_ib.pop("destination", None)
+            _tg_ib.pop("server_name", None)
 
     # Backfill placeholder domains on any pre-existing inbounds so configs never
     # carry localhost/SERVER_IP when a real domain is available.
@@ -1402,11 +1416,15 @@ async def _worker_proxy_sync_loop():
     await asyncio.sleep(30)
     while True:
         try:
-            if WORKER.get("connected") and WORKER.get("auto_sync"):
-                await _sync_worker_proxies_from_source()
+            if WORKER.get("connected"):
+                if WORKER.get("auto_sync"):
+                    await _sync_worker_proxies_from_source()
+                # Worker owns runtime traffic counters; pull them back to Railway
+                # so the panel dashboard/subscription always reflects reality.
+                await _worker_pull_all_users()
         except Exception as e:
-            logger.warning(f"worker proxy sync failed: {e}")
-        await asyncio.sleep(WORKER_SYNC_INTERVAL)
+            logger.warning(f"worker sync failed: {e}")
+        await asyncio.sleep(min(WORKER_SYNC_INTERVAL, 30))
 
 
 @app.on_event("shutdown")
@@ -2740,10 +2758,14 @@ async def create_inbound(request: Request, _=Depends(require_auth)):
         raise HTTPException(status_code=400, detail="Invalid protocol")
     network = str(body.get("network") or "ws").lower()
     security = str(body.get("security") or "tls").lower()
-    # A "worker" inbound is a special type: it produces a config addressed to the
-    # deployed Cloudflare Worker domain (address/host/sni = worker_domain) and
-    # optionally carries the BPB snispoofing params. The worker domain is pulled
-    # automatically from the connected worker — no manual entry needed.
+    domain = str(body.get("domain") or "").strip()
+    external_domain = str(body.get("external_domain") or "").strip()
+    sni = str(body.get("sni") or "").strip()
+    destination = str(body.get("destination") or "").strip()
+    server_name = str(body.get("server_name") or "").strip()
+    # A "worker" inbound is a special type: it is addressed to the deployed
+    # Cloudflare Worker domain; Railway only controls it and is not in the
+    # client traffic path.
     if protocol == "worker":
         wdom = _worker_safe_domain(WORKER.get("worker_domain"))
         if not wdom:
@@ -2753,13 +2775,6 @@ async def create_inbound(request: Request, _=Depends(require_auth)):
         domain = wdom
         external_domain = wdom
         sni = wdom
-        if not external_port:
-            external_port = 443
-    domain = str(body.get("domain") or "").strip()
-    external_domain = str(body.get("external_domain") or "").strip()
-    sni = str(body.get("sni") or "").strip()
-    destination = str(body.get("destination") or "").strip()
-    server_name = str(body.get("server_name") or "").strip()
 
     # Telegram uses the explicit internal listener from telegram_settings.
     if protocol == "telegram":
@@ -2957,10 +2972,10 @@ async def update_inbound(inbound_id: str, request: Request, _=Depends(require_au
             ib["external_domain"] = tg["external_domain"]
         if (ib.get("protocol") or "").lower() == "telegram":
             tg = ib.setdefault("telegram_settings", {})
-            # Telegram never exposes/stores SNI, Destination or Server Name.
-            ib["sni"] = ""
-            ib["destination"] = ""
-            ib["server_name"] = ""
+            # Telegram Proxy does not have SNI, Destination or Server Name.
+            ib.pop("sni", None)
+            ib.pop("destination", None)
+            ib.pop("server_name", None)
             tg["internal_port"] = int((body.get("telegram_settings") or {}).get("internal_port") or body.get("port") or tg.get("internal_port") or ib.get("port") or 44344)
             tg["external_port"] = int((body.get("telegram_settings") or {}).get("external_port") or body.get("external_port") or tg.get("external_port") or ib.get("external_port") or 443)
             tg["external_domain"] = str((body.get("telegram_settings") or {}).get("external_domain") or body.get("external_domain") or tg.get("external_domain") or ib.get("external_domain") or "").strip()
@@ -2971,6 +2986,14 @@ async def update_inbound(inbound_id: str, request: Request, _=Depends(require_au
             ib["destination"] = str(body["destination"]).strip()
         if "server_name" in body:
             ib["server_name"] = str(body["server_name"]).strip()
+        if (ib.get("protocol") or "").lower() == "telegram":
+            ib.pop("sni", None)
+            ib.pop("destination", None)
+            ib.pop("server_name", None)
+    if (ib.get("protocol") or "").lower() not in ("telegram", "worker", "reality") and (ib.get("security") or "").lower() != "reality":
+        ib["external_domain"] = ""
+        ib["external_port"] = ""
+
     await save_state()
     log_activity("inbound", f"اینباند «{ib.get('name', inbound_id)}» ویرایش شد", "info")
     asyncio.create_task(_xray_apply())
@@ -5801,7 +5824,7 @@ async def scan_railway_ips(_=Depends(require_auth)):
 # ══════════════════════════════════════════════════════════════════════════════
 
 CF_API = "https://api.cloudflare.com/client/v4"
-CF_TOKEN_LINK = "https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_routes%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_kv_storage%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_r2%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22dns%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22zone%22%2C%22type%22%3A%22read%22%7D%5D&accountId=%2A&zoneId=all&name=spider-Token"
+CF_TOKEN_LINK = "https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_kv_storage%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_routes%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22account_settings%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22zone%22%2C%22type%22%3A%22read%22%7D%5D&accountId=*&zoneId=all&name=spider-Token"
 
 # Worker script deployed to the user's Cloudflare account lives in the project
 # at worker/_worker.js (NOT under /static, so it is never served to the web).
@@ -5890,7 +5913,6 @@ def _worker_public() -> dict:
         "auto_sync": bool(WORKER.get("auto_sync", True)),
         "sync_error": WORKER.get("sync_error", ""),
         "sync_count": int(WORKER.get("sync_count", 0)),
-        "control_token": WORKER.get("control_token", ""),
         "token_link": CF_TOKEN_LINK,
         "proxies": [
             {"code": code, **dict(p)}
@@ -5909,7 +5931,7 @@ async def _ensure_worker_kv() -> str | None:
     if existing:
         return existing
     # List existing namespaces, reuse if we already created one.
-    code, data = await _cf_api("GET", f"/accounts/{acct}/storage/kv/namespaces", cf_token, email=WORKER.get("cf_email"))
+    code, data = await _cf_api("GET", f"/accounts/{acct}/storage/kv/namespaces", cf_token, email="")
     if code == 200:
         for ns in (data.get("result") or []):
             if ns.get("title") == "spider-worker-kv":
@@ -5919,7 +5941,7 @@ async def _ensure_worker_kv() -> str | None:
     # Create a new namespace.
     code, data = await _cf_api(
         "POST", f"/accounts/{acct}/storage/kv/namespaces",
-        cf_token, {"title": "spider-worker-kv"}, email=WORKER.get("cf_email"),
+        cf_token, {"title": "spider-worker-kv"}, email="",
     )
     if code == 200 and data.get("result"):
         nid = data["result"].get("id")
@@ -5963,7 +5985,7 @@ async def _worker_deploy() -> tuple:
     if not cf_token:
         return 0, {"errors": [{"message": "Cloudflare API token is missing (worker not connected properly)"}]}
     kv_id = await _ensure_worker_kv()
-    email = str(WORKER.get("cf_email") or "")
+    email = ""
     # Use Global API Key auth (X-Auth-Email + X-Auth-Key) when the token is a
     # real GAK (cfk_/cf_ prefix or 37-char hex); otherwise a Bearer token always
     # goes through Authorization even if an email is on file.
@@ -6434,14 +6456,13 @@ async def worker_setup(request: Request, _=Depends(require_auth)):
             "connected": True,
             "account_id": account_id,
             "worker_name": worker_name,
-            "cf_email": "",
             "worker_domain": worker_domain,
             "worker_url": f"https://{worker_domain}",
             "token": token,
-            "cf_email": email or "",
             "last_error": "",
         })
     sc, sd = await _worker_deploy()
+    await _worker_enable_workers_dev()
     if sc not in (200, 201, 409):
         msg = (sd.get("errors") or [{}])[0].get("message", "deploy failed")
         async with WORKER_LOCK:
@@ -6469,6 +6490,7 @@ async def worker_sync(_=Depends(require_auth)):
     if not WORKER.get("connected"):
         raise HTTPException(status_code=400, detail="worker is not connected")
     sc, sd = await _worker_deploy()
+    await _worker_enable_workers_dev()
     if sc in (200, 201, 409):
         await _worker_sync_users()
         await _ensure_worker_inbound()
@@ -6848,6 +6870,15 @@ async def scanner_sni_results(_=Depends(require_auth)):
     """Return the fastest SNIs from previous scans."""
     results = _read_sni_results()
     return {"ok": True, "results": results}
+
+
+@app.post("/api/scanner/sni-clear-results")
+async def scanner_sni_clear_results(_=Depends(require_auth)):
+    """Clear live SNI results before a new manual/auto scan."""
+    f = _sni_result_file()
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text("# Fastest SNIs for Reality\n# Format: sni|latency_ms\n", encoding="utf-8")
+    return {"ok": True, "results": []}
 
 
 @app.post("/api/scanner/sni-save-results")

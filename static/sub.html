@@ -581,7 +581,7 @@
     // Read the real network type from the config link itself (&type=...),
     // which is authoritative — the user-level transport_type can be stale.
     var tmatch = c.match(/[?&]type=([a-z0-9-]+)/i);
-    var ctype = tmatch ? tmatch[1].toUpperCase() : 'WS';
+    var ctype = tmatch ? tmatch[1].toUpperCase() : (dd.protocol || 'unknown').toUpperCase();
 
     // Extract key info from VLESS link for clean display
     var remark = '', address = '', port = '', path = '', sni = '', type = '';
@@ -616,6 +616,7 @@
         '<div class="flex items-center gap-2">' +
           '<span class="font-code-label text-code-label text-on-surface font-bold ltr:text-left rtl:text-right" dir="ltr">' + esc((c.split('://')[0] || dd.protocol || 'vless').toUpperCase()) + ' #' + (i + 1) + '</span>' +
           '<span class="px-2 py-0.5 rounded-full bg-black/10 dark:bg-white/10 font-code-label text-[10px] text-on-surface-variant">' + esc(ctype) + '</span>' +
+          '<span class="px-2 py-0.5 rounded-full bg-black/10 dark:bg-white/10 font-code-label text-[10px] text-on-surface-variant">' + esc((type && type !== 'ws') ? type.toUpperCase() : ((new URLSearchParams((c.split('?')[1]||'').split('#')[0])).get('security') || dd.security || '').toUpperCase()) + '</span>' +
         '</div>' +
         '<span class="cfg-text text-on-surface-variant truncate max-w-[280px] md:max-w-[480px] ltr:text-left rtl:text-right" dir="ltr" title="' + esc(c) + '">' + esc(displayInfo) + '</span>' +
       '</div>' +
