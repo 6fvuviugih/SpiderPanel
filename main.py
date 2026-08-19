@@ -2497,11 +2497,13 @@ async def get_stats(_=Depends(require_auth)):
     active_users = sum(1 for u in snap_users.values() if u.get("status") == "active")
     total_users = len(snap_users)
 
-    # Traffic across all links
-    total_bytes = stats["total_bytes"]
-    traffic_usage_gb = round(total_bytes / (1024 ** 3), 3)
+    # Real traffic comes from per-user counters (the persisted source of truth).
+    # Fall back to HTTP proxy bytes only when no user traffic has been recorded.
+    user_traffic_bytes = sum(int(u.get("traffic_used_bytes") or 0) for u in snap_users.values())
+    total_bytes = max(user_traffic_bytes, int(stats.get("total_bytes") or 0))
+    traffic_usage_gb = round(total_bytes / (1024 ** 3), 6)
 
-    # Connection-based health simulation
+    # Live connection count is the actual number of active relay sessions.
     conn_count = len(connections)
     if conn_count > 400:
         server_status = "down"
@@ -4556,8 +4558,9 @@ def get_live_stats() -> dict:
         net_recv_mb = 0
         network_mbps = 2.5
     # Calculate total traffic from all users
-    total_used = sum(u.get("traffic_used_bytes", 0) for u in USERS.values())
-    total_limit = sum(u.get("traffic_limit_bytes", 0) for u in USERS.values())
+    total_used = sum(int(u.get("traffic_used_bytes") or 0) for u in USERS.values())
+    total_limit = sum(int(u.get("traffic_limit_bytes") or 0) for u in USERS.values())
+    total_used = max(total_used, int(stats.get("total_bytes") or 0))
     return {
         "cpu_percent": max(0, cpu_pct),
         "ram_percent": max(0, ram_pct),
@@ -4566,13 +4569,15 @@ def get_live_stats() -> dict:
         "disk_percent": max(0, disk_pct),
         "disk_used_gb": disk_used_gb,
         "disk_total_gb": disk_total_gb,
+        "server_status": ("down" if cpu_pct >= 98 or ram_pct >= 98 or disk_pct >= 99 else "degraded" if cpu_pct >= 85 or ram_pct >= 90 or disk_pct >= 95 else "healthy"),
         "network_mbps": network_mbps,
         "net_sent_mb": net_sent_mb,
         "net_recv_mb": net_recv_mb,
         "active_connections": conn_count,
         "ws_connections": ws_client_count,
+        "active_users": sum(1 for u in USERS.values() if u.get("status") == "active"),
         "total_users": len(USERS),
-        "total_traffic_used_tb": round(total_used / (1024**4), 3),
+        "total_traffic_used_tb": round(total_used / (1024**4), 6),
         "total_traffic_limit_tb": round(total_limit / (1024**4), 3) if total_limit > 0 else 0,
         "uptime": uptime(),
         "uptime_seconds": uptime_secs(),
@@ -6853,6 +6858,19 @@ async def scanner_sni_results(_=Depends(require_auth)):
     """Return the fastest SNIs from previous scans."""
     results = _read_sni_results()
     return {"ok": True, "results": results}
+
+
+@app.post("/api/scanner/sni-clear-results")
+async def scanner_sni_clear_results(_=Depends(require_auth)):
+    """Clear previously saved SNI scan results so a new run starts empty."""
+    try:
+        f = _sni_result_file()
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("# Fastest SNIs for Reality (live scanner)\n# Format: sni|latency_ms\n", encoding="utf-8")
+        return {"ok": True, "results": []}
+    except Exception as e:
+        logger.warning(f"Could not clear SNI results: {e}")
+        raise HTTPException(status_code=500, detail="could not clear SNI results")
 
 
 @app.post("/api/scanner/sni-save-results")

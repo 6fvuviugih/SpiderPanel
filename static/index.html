@@ -547,8 +547,14 @@ input,select,button,textarea{font-family:inherit}
 .tab-content.hidden{display:none!important}
 .tab-content:not(.hidden){display:flex;flex-direction:column;position:static!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;transform:none!important;width:100%;margin-top:0!important;align-self:stretch;}
 /* Settings / Contact / Worker must always start at the top of the content area. */
-#tab-worker,#tab-settings,#tab-contact{position:static!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;transform:none!important;width:100%!important;margin-top:0!important;align-self:stretch;}
-#tab-worker>.panel,#tab-settings>.panel,#tab-contact>.panel{margin-top:0!important;}
+#tab-worker,#tab-settings,#tab-contact{
+  position:static!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;
+  transform:none!important;width:100%!important;margin:0!important;padding:0!important;
+  align-self:flex-start!important;flex:0 0 auto!important;min-height:auto!important;height:auto!important;
+  justify-content:flex-start!important;align-items:stretch!important;
+}
+#tab-worker>.panel,#tab-settings>.panel,#tab-contact>.panel{margin:0 0 14px 0!important;position:static!important;transform:none!important;}
+.content{justify-content:flex-start!important;align-items:stretch!important;}
 
 /* LTR (English) adjustments — iOS system font */
 html[lang="en"] body, html[lang="en"] .sidebar, html[lang="en"] .panel, html[lang="en"] .btn { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, 'Segoe UI', Roboto, sans-serif; }
@@ -1216,7 +1222,7 @@ tr{animation:fadeIn .3s ease}
               <div class="f-g" style="flex:2">
                 <label>SNI (Reality Target)</label>
                 <div style="display:flex;gap:6px">
-                  <input type="text" id="scn-sni-input" placeholder="example.com" dir="ltr" style="flex:1">
+                  <input type="text" id="scn-sni-input" placeholder="SNI را وارد کنید" dir="ltr" style="flex:1">
                   <button class="btn btn-p" onclick="scnRunSingleSni()" title="اسکن این SNI">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                   </button>
@@ -1421,7 +1427,7 @@ tr{animation:fadeIn .3s ease}
     </div>
     <div class="f-g">
       <label data-i18n="inboundsMulti">اینباندها (چندتایی)</label>
-      <div class="px-hint" data-i18n="inboundPickHint">برای هر اینباند، گزینه‌های مخصوصش نمایش داده می‌شود: Worker → انتخاب کشور، TLS → سوییچ IP اسکنر، Reality → بدون گزینه.</div>
+      <div class="px-hint" data-i18n="inboundPickHint">برای هر اینباند، گزینه‌های مخصوصش نمایش داده می‌شود: Worker → انتخاب کشور؛ VLESS غیرپیش‌فرض → Cloudflare و Railway؛ Reality → بدون گزینه.</div>
       <div id="cu-inbound" class="f-r" style="gap:8px;margin-top:6px"></div>
     </div>
     <div class="f-g" style="display:flex;align-items:center;gap:8px;margin-top:8px">
@@ -1454,7 +1460,7 @@ tr{animation:fadeIn .3s ease}
     </div>
     <div class="f-g">
       <label data-i18n="inboundsMulti">اینباندها (چندتایی)</label>
-      <div class="px-hint" data-i18n="inboundPickHint">برای هر اینباند، گزینه‌های مخصوصش نمایش داده می‌شود: Worker → انتخاب کشور، TLS → سوییچ IP اسکنر، Reality → بدون گزینه.</div>
+      <div class="px-hint" data-i18n="inboundPickHint">برای هر اینباند، گزینه‌های مخصوصش نمایش داده می‌شود: Worker → انتخاب کشور؛ VLESS غیرپیش‌فرض → Cloudflare و Railway؛ Reality → بدون گزینه.</div>
       <div id="eu-inbound" class="f-r" style="gap:8px;margin-top:6px"></div>
     </div>
     <div class="modal-btns">
@@ -1657,7 +1663,7 @@ var I18N = {
     'contactSub': 'برای پشتیبانی و همکاری با من در ارتباط باشید',
     'createUser': 'ایجاد کاربر جدید', 'editUser': 'ویرایش کاربر', 'username': 'نام کاربری', 'conn': 'اتصال همزمان', 'volume': 'حجم', 'unit': 'واحد', 'expire': 'اعتبار', 'day': 'روز', 'month': 'ماه',
     'inboundsMulti': 'اینباندها (چندتایی)', 'noInboundOpt': 'اینباندی وجود ندارد',
-    'inboundPickHint': 'برای هر اینباند، گزینه‌های مخصوصش نمایش داده می‌شود: Worker → انتخاب کشور، TLS → سوییچ IP اسکنر، Reality → بدون گزینه.',
+    'inboundPickHint': 'برای هر اینباند، گزینه‌های مخصوصش نمایش داده می‌شود: Worker → انتخاب کشور؛ VLESS غیرپیش‌فرض → Cloudflare و Railway؛ Reality → بدون گزینه.',
     'workerCountries': 'کشورهای چندمنطقه‌ای (برای هر کشور یک تیک فعال کنید):',
     'addCfIps': 'افزودن ۱۰ کانفیگ با IPهای Cloudflare اسکن‌شده',
     'addRailwayIps': 'افزودن ۱۰ کانفیگ با IPهای Railway اسکن‌شده',
@@ -1968,7 +1974,8 @@ function switchTab(tab, el) {
   if (target) target.classList.remove('hidden');
   // Every tab starts at the top; do not inherit the previous tab's scroll position.
   var content = document.querySelector('.content');
-  if (content) content.scrollTop = 0;
+  if (content) { content.scrollTop = 0; content.scrollLeft = 0; }
+  if (target) { target.scrollTop = 0; target.scrollLeft = 0; target.style.marginTop = '0px'; }
   window.scrollTo(0, 0);
   stopLiveStats();
   if (tab === 'dashboard') loadDashboard();
@@ -2013,11 +2020,11 @@ async function loadDashboard() {
     var s = await api('/stats');
     var html = '<div class="stats">';
     html += statCard(iconUsers, '<span id="dash-users">' + s.active_users + ' / ' + s.total_users + '</span>', t('activeUsers'));
-    html += statCard(iconTraffic, '<span id="dash-traffic">' + fmtBytes(s.traffic_usage_gb * 1073741824) + '</span>', t('trafficUsed'));
+    html += statCard(iconTraffic, '<span id="dash-traffic">' + fmtBytes((s.traffic_usage_gb || 0) * 1073741824) + '</span>', t('trafficUsed'));
     html += statCard(iconConn, '<span id="dash-conn">' + (s.active_connections || '۰') + '</span>', t('activeConns'));
     html += statCard(iconUptime, '<span id="dash-uptime">...</span>', t('uptime'));
     html += '</div>';
-    html += '<div class="panel"><div class="panel-h" style="align-items:center"><span class="glow">' + t('srv') + '</span><span class="badge badge-g" style="margin-right:auto;font-size:9px;animation:pulse 1.5s infinite">' + t('live') + '</span></div>';
+    html += '<div class="panel"><div class="panel-h" style="align-items:center"><span class="glow">' + t('srv') + '</span><span id="dash-server-status" class="badge badge-g" style="margin-right:auto;font-size:9px;animation:pulse 1.5s infinite">LIVE</span></div>';
     html += '<div class="srv-bar"><div class="srv-bar-h"><strong>' + t('cpu') + '</strong><span id="live-cpu">--</span>%</div><div class="srv-bar-bg"><div class="srv-bar-f" id="bar-cpu" style="width:0%"></div></div></div>';
     html += '<div class="srv-bar"><div class="srv-bar-h"><strong>' + t('ram') + '</strong><span id="live-ram">--</span></div><div class="srv-bar-bg"><div class="srv-bar-f" id="bar-ram" style="width:0%"></div></div></div>';
     html += '<div class="srv-bar"><div class="srv-bar-h"><strong>' + t('disk') + '</strong><span id="live-disk">--</span></div><div class="srv-bar-bg"><div class="srv-bar-f" id="bar-disk" style="width:0%"></div></div></div>';
@@ -2046,6 +2053,14 @@ async function refreshLiveStats() {
     var recvEl = $id('live-net-recv'); if (recvEl) recvEl.textContent = (st.net_recv_mb||'0') + ' MB';
     var uptEl = $id('live-uptime'); if (uptEl) uptEl.textContent = fmtUptime(st.uptime_seconds);
     var duptEl = $id('dash-uptime'); if (duptEl) duptEl.textContent = fmtUptime(st.uptime_seconds);
+    var connEl = $id('dash-conn'); if (connEl) connEl.textContent = String(st.active_connections || 0);
+    var trEl = $id('dash-traffic'); if (trEl) trEl.textContent = fmtBytes((st.total_traffic_used_tb || 0) * 1099511627776);
+    var usrEl = $id('dash-users'); if (usrEl) usrEl.textContent = (st.active_users || 0) + ' / ' + (st.total_users || 0);
+    var statusEl = $id('dash-server-status'); if (statusEl) {
+      var ss = String(st.server_status || 'healthy');
+      statusEl.textContent = ss === 'healthy' ? 'HEALTHY' : ss === 'degraded' ? 'DEGRADED' : 'DOWN';
+      statusEl.className = 'badge ' + (ss === 'healthy' ? 'badge-g' : ss === 'degraded' ? 'badge-b' : 'badge-r');
+    }
   } catch(e) { /* keep old values */ }
 }
 
@@ -2909,17 +2924,7 @@ var SPF_IP_RANGES = [
   [198, 41, 128, 0, 18], [199, 27, 128, 0, 17], [162, 158, 0, 0, 15]
 ];
 // SNI list from sni-list.txt (truncated for performance - full list loaded on demand)
-var SPF_SNI_LIST = [
-  "www.cloudflare.com", "www.hcaptcha.com", "api.cloudflare.com", "dash.cloudflare.com",
-  "workers.cloudflare.com", "pages.cloudflare.com", "developers.cloudflare.com",
-  "cloudflare-dns.com", "one.one.one.one", "1.1.1.1", "cloudflare.com",
-  "www.google.com", "www.youtube.com", "www.facebook.com", "www.microsoft.com",
-  "www.apple.com", "www.amazon.com", "www.github.com", "www.twitter.com",
-  "api.openai.com", "chatgpt.com", "www.anthropic.com", "www.deepseek.com",
-  "www.cloudflare-dns.com", "cdnjs.cloudflare.com", "assets.hcaptcha.com",
-  "analytics.hcaptcha.com", "challenges.cloudflare.com", "radar.cloudflare.com",
-  "speed.cloudflare.com", "speedtest.cloudflare.com", "cdn.cloudflare.com"
-];
+var SPF_SNI_LIST = [];
 var SPF_STOP = false;
 var spfCtx = {
   ip: {found: [], tried: 0, gen: 0, seq: 0},
@@ -3184,6 +3189,7 @@ async function scnRunSingleSni() {
   var sni = ($id('scn-sni-input').value || '').trim();
   if (!sni) { toast('SNI را وارد کنید', 'err'); return; }
   SCN_SNI_STOP = false;
+  try { await api('/api/scanner/sni-clear-results', {method: 'POST'}); } catch(e) {}
   var list = $id('scn-sni-list');
   list.innerHTML = '<div class="scn-empty">در حال تست...</div>';
   $id('scn-sni-tried').textContent = '۰';
@@ -3204,11 +3210,18 @@ async function scnRunSingleSni() {
         (x.ok ? '<span class="scn-ms good">' + x.latency_ms + 'ms</span>' : '<span class="scn-ms bad">✗</span>') + '</div>';
     });
     list.innerHTML = rows || '<div class="scn-empty">نتیجه‌ای یافت نشد</div>';
+    if (ok.length) {
+      await api('/api/scanner/sni-save-results', {method: 'POST', body: {results: [{sni: sni, latency_ms: ok[0].latency_ms}], top: 3}});
+      scnLoadSniResults();
+    }
   } catch(e) { list.innerHTML = '<div class="scn-empty">خطا: ' + esc(e.message) + '</div>'; }
 }
 
 async function scnRunAutoSni() {
   SCN_SNI_STOP = false;
+  // Every scan starts from an empty result set: no built-in/default SNI is shown.
+  try { await api('/api/scanner/sni-clear-results', {method: 'POST'}); } catch(e) {}
+  var savedEl = $id('scn-sni-results'); if (savedEl) savedEl.innerHTML = '<span class="scn-empty">در حال اسکن...</span>';
   var btn = $id('scn-sni-auto-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'در حال اسکن...'; }
   var list = $id('scn-sni-list');
@@ -3245,6 +3258,12 @@ async function scnRunAutoSni() {
           '<span class="scn-ms good">' + x.latency_ms + 'ms</span></div>';
       });
       list.innerHTML = rows || '<div class="scn-empty">در حال اسکن...</div>';
+      // Persist the current fastest results immediately, not only at the end.
+      var liveTop = okList.slice(0, 3).map(function(x) { return { sni: x.target.replace(':443',''), latency_ms: x.latency_ms }; });
+      if (liveTop.length) {
+        await api('/api/scanner/sni-save-results', {method: 'POST', body: {results: liveTop, top: 3}});
+        scnLoadSniResults();
+      }
       // Rate limit between batches
       if (i + BATCH < snis.length && !SCN_SNI_STOP) {
         await new Promise(function(r) { setTimeout(r, 200); });
@@ -3465,6 +3484,10 @@ async function spfRunIpScan() {
 
 async function spfRunSniScan() {
   if (spfCtx.sni.running) return;
+  if (!SPF_SNI_LIST.length) {
+    try { var sr = await api('/api/scanner/sni-list'); SPF_SNI_LIST = sr.sni_list || []; } catch(e) {}
+  }
+  if (!SPF_SNI_LIST.length) { toast('لیست SNI خالی است', 'err'); return; }
   spfCtx.sni.running = true;
   spfCtx.sni.found = [];
   spfCtx.sni.tried = 0;
@@ -4031,12 +4054,16 @@ function cuRenderInboundOpts() {
           '<span class="set-lbl" style="font-size:11px">' + t('addCfIps') + '</span>' +
           '<button type="button" class="ios-switch' + (sel.cf ? ' on' : '') + '" data-type="cf" onclick="cuToggleIpSwitch(\'' + esc(id) + '\',this)"></button>' +
         '</div>';
-      } else if (type === 'tls') {
+      } else if (type === 'tls' && (ib.protocol || '').toLowerCase() === 'vless' && !String(id).toLowerCase().startsWith('default')) {
         var selt = cuInboundState.countries[id] || {};
-        html += '<div class="set-row" style="padding:0;border:none">' +
-          '<span class="set-lbl" style="font-size:11px">' + t('addRailwayIps') + '</span>' +
-          '<button type="button" class="ios-switch' + (selt.railway ? ' on' : '') + '" data-type="railway" onclick="cuToggleIpSwitch(\'' + esc(id) + '\',this)"></button>' +
-        '</div>';
+        html += '<div class="set-row" style="padding:0;border:none"><span class="set-lbl" style="font-size:11px">Cloudflare IP</span>' +
+          '<button type="button" class="ios-switch' + (selt.cf ? ' on' : '') + '" data-type="cf" onclick="cuToggleIpSwitch(\'' + esc(id) + '\',this)"></button></div>' +
+          '<div class="set-row" style="padding:0;border:none"><span class="set-lbl" style="font-size:11px">Railway IP</span>' +
+          '<button type="button" class="ios-switch' + (selt.railway ? ' on' : '') + '" data-type="railway" onclick="cuToggleIpSwitch(\'' + esc(id) + '\',this)"></button></div>';
+      } else if (type === 'tls') {
+        var selt2 = cuInboundState.countries[id] || {};
+        html += '<div class="set-row" style="padding:0;border:none"><span class="set-lbl" style="font-size:11px">' + t('addRailwayIps') + '</span>' +
+          '<button type="button" class="ios-switch' + (selt2.railway ? ' on' : '') + '" data-type="railway" onclick="cuToggleIpSwitch(\'' + esc(id) + '\',this)"></button></div>';
       } else if (type === 'wireguard') {
         html += '<div class="px-hint" style="margin:0">WireGuard — نیازی به IP اضافی نیست</div>';
       } else if (type === 'telegram') {
