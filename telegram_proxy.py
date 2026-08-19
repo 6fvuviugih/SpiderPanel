@@ -107,10 +107,10 @@ async def run_docker_telegram_proxy(
 
     Args:
         container_name: Name for the Docker container
-        port: Port to expose (internal port)
+        port: Port to expose on host (internal port)
         secret: 32-char hex secret for MTProto
-        domain: Optional domain for the proxy
-        proxy_tag: Optional proxy tag from @MTProxybot
+        domain: Optional domain for the proxy (for advertising)
+        proxy_tag: Optional proxy tag from @MTProxybot (32 hex chars)
 
     Returns:
         True if container started successfully, False otherwise
@@ -146,6 +146,8 @@ async def run_docker_telegram_proxy(
     # Add proxy tag if provided (for MTProxybot)
     # Note: The official image uses PROXY_TAG env var
     # We'll add it if provided
+    if proxy_tag:
+        cmd.extend(["-e", f"PROXY_TAG={proxy_tag}"])
 
     cmd.append("telegrammessenger/proxy:latest")
 

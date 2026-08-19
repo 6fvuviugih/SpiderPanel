@@ -709,6 +709,220 @@ def generate_wg_config(user_id: str, user: dict, inbound: dict, remark_tag: str 
         endpoint = wg.get("endpoint") or "8.6.112.4:443"
         mtu = wg.get("mtu") or "1280"
         address = wg.get("address") or "172.16.0.2/32"
+        dns = wg.get("dns") or "1.1.1.1, 1.0.0.1"
+
+    # AmneziaWG parameters
+    jc = wg.get("jc") or "3"
+    jmin = wg.get("jmin") or "1"
+    jmax = wg.get("jmax") or "3"
+    s1 = wg.get("s1") or "0"
+    s2 = wg.get("s2") or "0"
+    h1 = wg.get("h1") or "1"
+    h2 = wg.get("h2") or "2"
+    h3 = wg.get("h3") or "3"
+    h4 = wg.get("h4") or "4"
+    i1 = wg.get("i1") or ""
+
+    rem = f"Spider-{username}-WG"
+    if remark_tag:
+        rem = f"{rem} {remark_tag}"
+
+    config = f"""# AmneziaWG Config
+
+[Interface]
+PrivateKey = {priv_key}
+Address = {address}
+DNS = {dns}
+MTU = {mtu}
+Jc = {jc}
+Jmin = {jmin}
+Jmax = {jmax}
+S1 = {s1}
+S2 = {s2}
+H1 = {h1}
+H2 = {h2}
+H3 = {h3}
+H4 = {h4}
+I1 = {i1}
+
+[Peer]
+PublicKey = {server_pub}
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = {endpoint}
+"""
+    return config.strip()
+
+
+def _wg_read_endpoints() -> list:
+    """Read available endpoints from data/endpoint.txt."""
+    ep_file = Path(os.path.dirname(os.path.abspath(__file__))) / "data" / "endpoint.txt"
+    if not ep_file.is_file():
+        ep_file = DATA_DIR / "endpoint.txt"
+    if not ep_file.is_file():
+        return []
+    out = []
+    for line in ep_file.read_text(errors="ignore").splitlines():
+        line = line.strip()
+        if line and ":" in line and not line.startswith("#"):
+            out.append(line)
+    return out
+
+
+def generate_wg_config(user_id: str, user: dict, inbound: dict, remark_tag: str = None) -> str:
+    """Generate an AmneziaWG config for a user based on the inbound settings.
+
+    Supports two modes:
+    - WARP mode (warp_mode=True): Uses Cloudflare WARP infrastructure with
+      proper WARP PublicKey, Address (IPv4+IPv6), DNS, and endpoints.
+    - Custom mode (warp_mode=False): Uses user-defined server settings.
+    """
+    username = user.get("username", user_id)
+    wg = inbound.get("wireguard_settings") or {}
+    warp_mode = bool(wg.get("warp_mode"))
+
+    # Generate per-user WireGuard private key
+    priv_key, _ = _wg_gen_keypair()
+    if not priv_key:
+        return ""
+
+    # AmneziaWG obfuscation parameters
+    jc = wg.get("jc") or "3"
+    jmin = wg.get("jmin") or "1"
+    jmax = wg.get("jmax") or "3"
+    s1 = wg.get("s1") or "0"
+    s2 = wg.get("s2") or "0"
+    h1 = wg.get("h1") or "1"
+    h2 = wg.get("h2") or "2"
+    h3 = wg.get("h3") or "3"
+    h4 = wg.get("h4") or "4"
+    i1 = wg.get("i1") or ""
+
+    if warp_mode:
+        # ── WARP mode: use Cloudflare WARP infrastructure ──
+        # Fixed WARP PublicKey (same for all WARP users)
+        server_pub = "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
+        # WARP address: 172.16.0.x/32 + IPv6
+        address = wg.get("address") or "172.16.0.2/32, 2606:4700:110::2/128"
+        # WARP DNS: Cloudflare DNS with IPv6
+        dns = wg.get("dns") or "1.1.1.1, 1.0.0.1, 2606:4700:4700::1111, 2606:4700:4700::1001"
+        mtu = wg.get("mtu") or "1280"
+        # Endpoint from the configured endpoint (should be a Cloudflare WARP IP)
+        endpoint = wg.get("endpoint") or "8.6.112.4:443"
+    else:
+        # ── Custom WireGuard server mode ──
+        server_pub = wg.get("server_public_key") or ""
+        if not server_pub:
+            _, server_pub = _wg_gen_keypair()
+        endpoint = wg.get("endpoint") or "8.6.112.4:443"
+        mtu = wg.get("mtu") or "1280"
+        address = wg.get("address") or "172.16.0.2/32"
+        dns = wg.get("dns") or "1.1.1.1, 1.0.0.1"
+
+    # AmneziaWG parameters
+    jc = wg.get("jc") or "3"
+    jmin = wg.get("jmin") or "1"
+    jmax = wg.get("jmax") or "3"
+    s1 = wg.get("s1") or "0"
+    s2 = wg.get("s2") or "0"
+    h1 = wg.get("h1") or "1"
+    h2 = wg.get("h2") or "2"
+    h3 = wg.get("h3") or "3"
+    h4 = wg.get("h4") or "4"
+    i1 = wg.get("i1") or ""
+
+    rem = f"Spider-{username}-WG"
+    if remark_tag:
+        rem = f"{rem} {remark_tag}"
+
+    config = f"""# AmneziaWG Config
+
+[Interface]
+PrivateKey = {priv_key}
+Address = {address}
+DNS = {dns}
+MTU = {mtu}
+Jc = {jc}
+Jmin = {jmin}
+Jmax = {jmax}
+S1 = {s1}
+S2 = {s2}
+H1 = {h1}
+H2 = {h2}
+H3 = {h3}
+H4 = {h4}
+I1 = {i1}
+
+[Peer]
+PublicKey = {server_pub}
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = {endpoint}
+"""
+    return config.strip()
+
+
+def _wg_read_endpoints() -> list:
+    """Read available endpoints from data/endpoint.txt."""
+    ep_file = Path(os.path.dirname(os.path.abspath(__file__))) / "data" / "endpoint.txt"
+    if not ep_file.is_file():
+        ep_file = DATA_DIR / "endpoint.txt"
+    if not ep_file.is_file():
+        return []
+    out = []
+    for line in ep_file.read_text(errors="ignore").splitlines():
+        line = line.strip()
+        if line and ":" in line and not line.startswith("#"):
+            out.append(line)
+    return out
+
+
+def generate_wg_config(user_id: str, user: dict, inbound: dict, remark_tag: str = None) -> str:
+    """Generate an AmneziaWG config for a user based on the inbound settings.
+
+    Supports two modes:
+    - WARP mode (warp_mode=True): Uses Cloudflare WARP infrastructure with
+      proper WARP PublicKey, Address (IPv4+IPv6), DNS, and endpoints.
+    - Custom mode (warp_mode=False): Uses user-defined server settings.
+    """
+    username = user.get("username", user_id)
+    wg = inbound.get("wireguard_settings") or {}
+    warp_mode = bool(wg.get("warp_mode"))
+
+    # Generate per-user WireGuard private key
+    priv_key, _ = _wg_gen_keypair()
+    if not priv_key:
+        return ""
+
+    # AmneziaWG obfuscation parameters
+    jc = wg.get("jc") or "3"
+    jmin = wg.get("jmin") or "1"
+    jmax = wg.get("jmax") or "3"
+    s1 = wg.get("s1") or "0"
+    s2 = wg.get("s2") or "0"
+    h1 = wg.get("h1") or "1"
+    h2 = wg.get("h2") or "2"
+    h3 = wg.get("h3") or "3"
+    h4 = wg.get("h4") or "4"
+    i1 = wg.get("i1") or ""
+
+    if warp_mode:
+        # ── WARP mode: use Cloudflare WARP infrastructure ──
+        # Fixed WARP PublicKey (same for all WARP users)
+        server_pub = "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
+        # WARP address: 172.16.0.x/32 + IPv6
+        address = wg.get("address") or "172.16.0.2/32, 2606:4700:110::2/128"
+        # WARP DNS: Cloudflare DNS with IPv6
+        dns = wg.get("dns") or "1.1.1.1, 1.0.0.1, 2606:4700:4700::1111, 2606:4700:4700::1001"
+        mtu = wg.get("mtu") or "1280"
+        # Endpoint from the configured endpoint (should be a Cloudflare WARP IP)
+        endpoint = wg.get("endpoint") or "8.6.112.4:443"
+    else:
+        # ── Custom WireGuard server mode ──
+        server_pub = wg.get("server_public_key") or ""
+        if not server_pub:
+            _, server_pub = _wg_gen_keypair()
+        endpoint = wg.get("endpoint") or "8.6.112.4:443"
+        mtu = wg.get("mtu") or "1280"
+        address = wg.get("address") or "172.16.0.2/32"
         dns = wg.get("dns") or "1.1.1.1,1.0.0.1"
 
     rem = f"Spider-{username}-WG"
@@ -2653,6 +2867,10 @@ async def create_inbound(request: Request, _=Depends(require_auth)):
         # The panel domain is used via SETTINGS["domain"] in generate_user_config
         external_domain = ""
         external_port = ""
+    # For WireGuard and Telegram, port is set to 0 (not used as listen port)
+    if protocol in ("wireguard", "telegram"):
+        port = 0
+        external_port = 0
 
     inbound_id = generate_short_id()
     async with INBOUNDS_LOCK:

@@ -512,17 +512,18 @@ input,select,button,textarea{font-family:inherit}
   border-left:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;
   position:fixed;top:0;bottom:0;right:0;z-index:100;transition:transform .35s cubic-bezier(.4,0,.2,1);
   overflow-y:auto;overflow-x:hidden;box-shadow:0 8px 32px rgba(0,0,0,.6);
+  height:100vh;
 }
 .sb-brand{padding:22px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)}
 .sb-brand img{width:42px;height:42px;mix-blend-mode:screen}
 .sb-brand-t{font-size:17px;font-weight:800;letter-spacing:3px;background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .sb-brand-t span{color:inherit;-webkit-text-fill-color:inherit}
 .sb-brand-s{font-size:10px;color:var(--txt2);letter-spacing:5px;margin-top:2px}
-.sb-nav{flex:1;padding:10px;overflow-y:auto;display:flex;flex-direction:column;justify-content:flex-start;gap:2px}
+.sb-nav{flex:1;padding:10px;overflow-y:auto;display:flex;flex-direction:column;justify-content:flex-start;gap:2px;min-height:0}
 .nav-item{
   padding:11px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;
   font-size:13px;font-weight:500;color:var(--txt2);transition:all .2s;
-  border-radius:12px;margin:0;position:relative;
+  border-radius:12px;margin:0;position:relative;flex-shrink:0;
 }
 .nav-item:hover{color:var(--txt);background:rgba(43,127,255,.06)}
 .nav-item.active{color:var(--nav-color);background:var(--nav-bg);border:1px solid var(--border-glow)}
@@ -1547,6 +1548,11 @@ tr{animation:fadeIn .3s ease}
         <div class="f-g"><label>External Port</label><input type="number" id="ib-tg-extport" value="443" dir="ltr" placeholder="443"></div>
       </div>
       <div class="f-g"><label>External Domain</label><input type="text" id="ib-tg-domain" dir="ltr" placeholder="proxy.example.com"></div>
+      <div class="f-r">
+        <div class="f-g"><label>SNI</label><input type="text" id="ib-tg-sni" dir="ltr" placeholder="www.google.com"></div>
+        <div class="f-g"><label>Destination</label><input type="text" id="ib-tg-dest" dir="ltr" placeholder="149.154.167.51:443"></div>
+      </div>
+      <div class="f-g"><label>Server Name</label><input type="text" id="ib-tg-servername" dir="ltr" placeholder="Optional server name"></div>
     </div>
 
     <!-- Network group -->
