@@ -143,16 +143,6 @@ function parseVlessHeader(data) {
 }
 
 // ── Country Proxy Lookup ────────────────────────────────────────────────────
-async function getCountryProxy(env, code) {
-  try {
-    const raw = await env.SPIDER_KV.get('proxies') || '[]';
-    const list = JSON.parse(raw);
-    const loc = list.find(x => String(x.code || '').toLowerCase() === code);
-    if (!loc) return '';
-    return String(loc.proxy || ((loc.proxies || [])[0]) || '');
-  } catch (e) { return ''; }
-}
-
 // ── Outbound Connection ─────────────────────────────────────────────────────
 function getConnector() {
   return typeof connect === 'function' ? connect : null;

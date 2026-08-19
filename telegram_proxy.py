@@ -18,14 +18,13 @@ SECRET_RE = re.compile(r"^[0-9a-fA-F]{32}$")
 
 
 def derive_secret_from_uuid(config_uuid: str, salt: str = "spider-tg-proxy") -> str:
-    """Return a valid 16-byte MTProxy secure secret (dd-prefixed).
+    """Return a 32-hex-character secret accepted by mtprotoproxy 1.0.6.
 
-    The previous implementation generated an ee-prefixed FakeTLS secret but
-    published no TLS domain, which made generated links invalid. A dd-prefixed
-    secure secret is the correct fit for a normal MTProxy deployment.
+    The Python mtprotoproxy package expects the secret itself as 32 hex
+    characters on the command line. Keep the user-facing link identical to
+    the value passed to the proxy process.
     """
-    digest = hashlib.sha256(f"{salt}:{config_uuid}".encode("utf-8")).digest()
-    return "dd" + digest[1:16].hex()
+    return hashlib.sha256(f"{salt}:{config_uuid}".encode("utf-8")).hexdigest()[:32]
 
 
 def validate_secret(secret: str) -> str:

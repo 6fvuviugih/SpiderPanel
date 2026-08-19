@@ -1341,6 +1341,9 @@ async def _start_telegram_proxy(inbound_id: str, inbound: dict):
 
     server = MTProtoProxyServer(inbound_id=inbound_id, port=int_port)
     server.update_secrets(secrets_map)
+    if not secrets_map:
+        logger.info(f"[TG Proxy {inbound_id}] no users yet; listener will start after a Telegram user is assigned")
+        return
 
     def on_traffic(user_id: str, nbytes: int):
         asyncio.create_task(_sync_tg_traffic(user_id, nbytes))
@@ -3347,11 +3350,14 @@ async def create_user(request: Request, _=Depends(require_auth)):
                 u = USERS.get(user_id)
                 if u:
                     current = str(u.get("telegram_secret") or "").strip().lower()
-                    # Regenerate old/invalid ee-prefixed secrets because the
-                    # panel now uses the maintained secure MTProxy mode.
-                    if not re.fullmatch(r"[0-9a-f]{32}", current) or not current.startswith("dd"):
+                    # mtprotoproxy 1.0.6 expects exactly 32 hex characters.
+                    if not re.fullmatch(r"[0-9a-f]{32}", current):
                         u["telegram_secret"] = derive_secret_from_uuid(config_uuid)
             asyncio.create_task(save_state())
+            # The inbound may have been created before this user existed.
+            # Rebuild its secret list and restart the listener now.
+            for _tg_iid in [i for i in inbound_ids if (INBOUNDS.get(i, {}).get("protocol") or "").lower() == "telegram"]:
+                asyncio.create_task(_restart_telegram_proxy(_tg_iid))
     host = SETTINGS.get("domain") or get_host()
     asyncio.create_task(_xray_apply())  # refresh Xray clients after user change
     return {
@@ -3404,6 +3410,8 @@ async def reset_user_traffic(user_id: str, _=Depends(require_auth)):
     # Reset the worker-side usage too, so the quota reflects the reset immediately.
     if WORKER.get("connected") and _user_uses_worker_inbound(u):
         asyncio.create_task(_worker_sync_users())
+    for _tg_iid in [i for i in (u.get("inbound_ids") or []) if (INBOUNDS.get(i, {}).get("protocol") or "").lower() == "telegram"]:
+        asyncio.create_task(_restart_telegram_proxy(_tg_iid))
     asyncio.create_task(save_state())
     log_activity("user", f"مصرف کاربر «{username}» ریست شد", "info")
     return {"ok": True, "user_id": user_id, "traffic_used_bytes": 0}
@@ -3475,10 +3483,18 @@ async def edit_user(user_id: str, request: Request, _=Depends(require_auth)):
                 u["inbound_id"] = valid[0]
             else:
                 u.pop("inbound_id", None)
+        # Ensure a Telegram secret exists whenever the edited user has a Telegram inbound.
+        if any((INBOUNDS.get(i, {}).get("protocol") or "").lower() == "telegram" for i in (u.get("inbound_ids") or [])):
+            from telegram_proxy import derive_secret_from_uuid
+            cur_secret = str(u.get("telegram_secret") or "").strip().lower()
+            if not re.fullmatch(r"[0-9a-f]{32}", cur_secret):
+                u["telegram_secret"] = derive_secret_from_uuid(u.get("config_uuid", user_id))
     # If the user uses the worker inbound, push updated volume/expiry to the worker.
     if WORKER.get("connected") and _user_uses_worker_inbound(u):
         asyncio.create_task(_worker_sync_users())
     asyncio.create_task(save_state())
+    for _tg_iid in [i for i in (u.get("inbound_ids") or []) if (INBOUNDS.get(i, {}).get("protocol") or "").lower() == "telegram"]:
+        asyncio.create_task(_restart_telegram_proxy(_tg_iid))
     return {"ok": True, "user_id": user_id}
 
 @app.get("/api/users/{user_id}")
@@ -3594,8 +3610,15 @@ async def edit_user(user_id: str, request: Request, _=Depends(require_auth)):
             _ccv = body["concurrent_connections"]
             cc = int(_ccv) if _ccv is not None else 3
             u["concurrent_connections"] = max(0, cc)
+        if any((INBOUNDS.get(i, {}).get("protocol") or "").lower() == "telegram" for i in (u.get("inbound_ids") or [])):
+            from telegram_proxy import derive_secret_from_uuid
+            cur_secret = str(u.get("telegram_secret") or "").strip().lower()
+            if not re.fullmatch(r"[0-9a-f]{32}", cur_secret):
+                u["telegram_secret"] = derive_secret_from_uuid(u.get("config_uuid", user_id))
 
     asyncio.create_task(save_state())
+    for _tg_iid in [i for i in (u.get("inbound_ids") or []) if (INBOUNDS.get(i, {}).get("protocol") or "").lower() == "telegram"]:
+        asyncio.create_task(_restart_telegram_proxy(_tg_iid))
     log_activity("user", f"کاربر «{old_username}» ویرایش شد", "info")
     return {"ok": True, "user_id": user_id, "username": u.get("username")}
 
