@@ -878,44 +878,15 @@ tr{animation:fadeIn .3s ease}
 @media(max-width:900px){.sidebar-backdrop.show{display:block}}
 .sidebar-tog{display:none}@media(max-width:900px){.sidebar-tog{display:inline-flex!important}}
 
-</style>
-<style>
-/* === Worker / Contact Me layout fix === */
-.tab-content {
-  width: 100%;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-}
-#tab-worker, #tab-contact {
-  display: block;
-  width: 100%;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-}
-#tab-worker.hidden, #tab-contact.hidden { display: none !important; }
-#tab-worker > .panel, #tab-contact > .panel {
-  width: 100%;
-  box-sizing: border-box;
-  margin: 0;
-}
-#tab-contact .contact-panel {
-  width: 100%;
-  box-sizing: border-box;
-  margin: 0;
-  align-self: stretch;
-}
-/* Keep sidebar items at the top; do not stretch them through the sidebar. */
-.sb-nav {
-  flex: 0 1 auto;
-  justify-content: flex-start;
-  gap: 2px;
-}
-@media (max-width: 700px) {
-  .content { padding: 14px; }
-  #tab-worker > .panel, #tab-contact > .panel { width: 100%; }
-}
+
+
+/* Panel tab positioning: same top/width as Dashboard and Inbounds panels */
+.tab-content{display:block;width:100%;min-width:0;margin:0;padding:0;}
+.tab-content.hidden{display:none !important;}
+#tab-worker,#tab-contact{position:relative;top:0;left:0;right:auto;width:100%;min-width:0;margin:0;padding:0;transform:none;}
+#tab-worker > .panel,#tab-contact > .panel{width:100%;box-sizing:border-box;margin-top:0;margin-bottom:16px;}
+#tab-worker .panel,#tab-contact .panel{align-self:stretch;}
+
 </style>
 </head>
 <body>
@@ -1494,6 +1465,7 @@ tr{animation:fadeIn .3s ease}
   <div class="modal-t"><span class="glow" id="ib-title">ایجاد اینباند جدید</span></div>
   <form onsubmit="submitInbound(event)">
     <input type="hidden" id="ib-id">
+    <input type="hidden" id="ib-port" value="443">
     <div class="f-g"><label data-i18n="inboundName">نام اینباند</label><input type="text" id="ib-name" required data-i18n-placeholder="inboundName" placeholder="مثال: Main-WS"></div>
     <div class="f-r">
       <div class="f-g"><label>Protocol</label><select id="ib-protocol" onchange="onProtocolChange()">
@@ -1988,8 +1960,8 @@ function switchTab(tab, el) {
   document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.add('hidden'); });
   var target = $id('tab-' + tab);
   if (target) target.classList.remove('hidden');
-  var contentArea = document.querySelector('.content');
-  if (contentArea) contentArea.scrollTop = 0;
+  var contentEl = document.querySelector('.content');
+  if (contentEl) contentEl.scrollTop = 0;
   stopLiveStats();
   if (tab === 'dashboard') loadDashboard();
   if (tab === 'users') loadUsers();
@@ -2650,8 +2622,18 @@ function editInbound(iid) {
     onNetworkChange();
     openModal('mod-inbound');
   } else {
-    // WS/TLS: fully automatic — nothing to configure.
-    toast(t('inboundAuto'), 'ok');
+    // VLESS / TLS: open the editor and populate the existing inbound.
+    $id('ib-security').value = ib.security || 'tls';
+    $id('ib-network').value = ib.network || 'ws';
+    $id('ib-port').value = ib.port || 443;
+    $id('ib-extdomain').value = ib.external_domain || '';
+    $id('ib-extport').value = ib.external_port || 443;
+    if (ib.sni) $id('ib-sni').value = ib.sni;
+    $id('ib-submit').textContent = t('updateInbound');
+    onProtocolChange();
+    onSecurityChange();
+    onNetworkChange();
+    openModal('mod-inbound');
   }
 }
 
@@ -2794,8 +2776,7 @@ document.addEventListener('keydown', function(ev) {
 document.addEventListener('DOMContentLoaded', wireModalCloseButtons);
 wireModalCloseButtons();
 
-// ─── DOM Helper ───
-// $id is defined once at the top of this script.
+// DOM helper is defined once near the top of this script.
 
 // ─── Helpers ───
 function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
