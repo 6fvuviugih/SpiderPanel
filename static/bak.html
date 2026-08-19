@@ -787,11 +787,11 @@ tr{animation:fadeIn .3s ease}
 .theme-dot.red{background:#ff1744}.theme-dot.green{background:#00ff41}.theme-dot.blue{background:#448aff}
 
 /* Contact Me bubbles */
-.contact-panel{text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}
+.contact-panel{text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px;justify-content:flex-start;min-height:auto}
 .contact-sub{font-size:12px;color:var(--txt2);margin-bottom:18px}
-.contact-bubbles{display:flex;gap:28px;justify-content:center;align-items:center;flex-wrap:wrap;width:100%;padding:16px 0 8px}
+.contact-bubbles{display:flex;gap:28px;justify-content:center;align-items:center;flex-wrap:wrap;padding:16px 0 8px}
 .contact-bubble{
-  display:flex;flex:0 1 150px;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
   width:150px;height:150px;border-radius:50%;
   background:#0a0a0d;
   border:1.5px solid var(--border);color:var(--txt);text-decoration:none;
@@ -816,12 +816,6 @@ tr{animation:fadeIn .3s ease}
 
 /* Copy button flash */
 @keyframes copyFlash{0%{background:var(--neon)}100%{background:transparent}}
-
-/* Contact Me: keep the bubbles centered and usable on narrow screens */
-@media(max-width:520px){
-  .contact-bubbles{gap:12px;padding-left:4px;padding-right:4px}
-  .contact-bubble{flex:1 1 130px;width:130px;max-width:150px;height:auto;aspect-ratio:1/1}
-}
 
 /* Mobile */
 @media(max-width:900px){
@@ -884,32 +878,6 @@ tr{animation:fadeIn .3s ease}
 @media(max-width:900px){.sidebar-backdrop.show{display:block}}
 .sidebar-tog{display:none}@media(max-width:900px){.sidebar-tog{display:inline-flex!important}}
 
-</style>
-<style>
-/* Fix: Worker + Contact Me vertical positioning */
-.tab-content {
-  padding-top: 8px !important;
-}
-#tab-worker,
-#tab-contact {
-  margin-top: 0 !important;
-  padding-top: 0 !important;
-}
-#tab-worker .panel,
-#tab-contact .panel,
-#tab-worker .contact-panel,
-#tab-contact .contact-panel {
-  margin-top: 0 !important;
-}
-@media (max-width: 700px) {
-  .tab-content {
-    padding-top: 4px !important;
-  }
-  #tab-worker,
-  #tab-contact {
-    padding-top: 0 !important;
-  }
-}
 </style>
 </head>
 <body>
@@ -1643,7 +1611,7 @@ tr{animation:fadeIn .3s ease}
 
 // ─── State ───
 var $ = qs => document.querySelector(qs);
-function $id(id) { return document.getElementById(id); }
+var $id = id => document.getElementById(id);
 var curCfg = '';
 var ALL_IB = [];
 var ALL_USERS = [];
@@ -2787,7 +2755,7 @@ document.addEventListener('DOMContentLoaded', wireModalCloseButtons);
 wireModalCloseButtons();
 
 // ─── DOM Helper ───
-// $id is defined at the top of this script so it is safely available everywhere.
+const $id = (id) => document.getElementById(id);
 
 // ─── Helpers ───
 function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
