@@ -982,6 +982,7 @@ a{color:inherit;text-decoration:none}
 var isDark=localStorage.getItem('spider-theme')==='dark';
 var currentPage='dash';
 var currentConfigText='';
+var currentConfigUserId='';
 var allUsers=[],allLinks=[];
 
 function applyTheme(dark){
@@ -1181,6 +1182,7 @@ async function viewConfig(uuid){
   var link=allLinks.find(function(l){return l.uuid===uuid});
   if(!link){toast('کانفیگ یافت نشد','err');return}
   currentConfigText=link.vless_link||'';
+  currentConfigUserId=link.user_id||link.uuid||'';
   document.getElementById('config-text').textContent=currentConfigText;
   document.getElementById('config-qr').style.display='none';
   openModal('modal-config');
@@ -1190,10 +1192,8 @@ function copyConfigText(){
   navigator.clipboard.writeText(currentConfigText).then(function(){toast('کانفیگ کپی شد ✓','ok')});
 }
 function showQRCode(){
-  if(!currentConfigText)return;
-  var apiBase=window.location.origin;
-  var username=currentLabel||'config';
-  var img=apiBase+'/api/users/'+encodeURIComponent(username)+'/qr?t='+Date.now();
+  if(!currentConfigUserId)return;
+  var img='/api/users/'+encodeURIComponent(currentConfigUserId)+'/qr?t='+Date.now();
   document.getElementById('config-qr-img').src=img;
   document.getElementById('config-qr').style.display='block';
 }
@@ -1251,6 +1251,7 @@ function showQRForLink(uuid){
   var link=allLinks.find(function(l){return l.uuid===uuid});
   if(!link||!link.vless_link)return;
   currentConfigText=link.vless_link;
+  currentConfigUserId=link.user_id||link.uuid||'';
   document.getElementById('config-text').textContent=currentConfigText;
   showQRCode();
   openModal('modal-config');
@@ -1724,7 +1725,7 @@ function renderContent(d){{currentData=d;var active=d.links.filter(function(l){{
 document.getElementById('root').innerHTML='<div class="info-card"><div class="info-name">'+esc(d.name)+'</div>'+(d.desc?'<div class="info-desc">'+esc(d.desc)+'</div>':'')+
 '<div class="info-stats"><div class="info-stat"><div class="info-s-val">'+toFa(active)+'</div><div class="info-s-label">کانفیگ فعال</div></div><div class="info-stat"><div class="info-s-val">'+toFa(d.links.length)+'</div><div class="info-s-label">کل کانفیگ‌ها</div></div><div class="info-stat"><div class="info-s-val">'+esc(d.total_used_fmt||'0')+'</div><div class="info-s-label">مصرف</div></div></div></div>'+
 '<div class="section-title"><i class="ti ti-link"></i> کانفیگ‌ها ('+toFa(d.links.length)+' عدد)</div>'+
-(d.links.length?d.links.map(function(l){{return'<div class="cfg-card"><div class="cfg-head"><div class="cfg-name">'+esc(l.label)+'</div><span class="cfg-status '+(l.active?'ok':'no')+'">'+(l.active?'<i class="ti ti-circle-check"></i> فعال':'<i class="ti ti-circle-x"></i> غیرفعال')+'</span></div><div class="cfg-code">'+esc(l.vless_link)+'</div><div class="cfg-actions"><button class="btn btn-p" onclick="navigator.clipboard.writeText(\''+esc(l.vless_link).replace(/'/g,"\\'")+'\').then(function(){{toast(\'کپی شد ✓\',\'ok\')}})"><i class="ti ti-copy"></i> کپی لینک</button><button class="btn btn-ghost" onclick="window.open(\'/api/sub/'+encodeURIComponent(l.label)+'/qr?t='+Date.now()+'\',\'_blank\')"><i class="ti ti-qrcode"></i> QR Code</button></div></div>'}}).join(''):'<div class="empty"><i class="ti ti-link-off"></i><p>کانفیگی در این گروه وجود ندارد</p></div>')+
+(d.links.length?d.links.map(function(l){{return'<div class="cfg-card"><div class="cfg-head"><div class="cfg-name">'+esc(l.label)+'</div><span class="cfg-status '+(l.active?'ok':'no')+'">'+(l.active?'<i class="ti ti-circle-check"></i> فعال':'<i class="ti ti-circle-x"></i> غیرفعال')+'</span></div><div class="cfg-code">'+esc(l.vless_link)+'</div><div class="cfg-actions"><button class="btn btn-p" onclick="navigator.clipboard.writeText(\''+esc(l.vless_link).replace(/'/g,"\\'")+'\').then(function(){{toast(\'کپی شد ✓\',\'ok\')}})"><i class="ti ti-copy"></i> کپی لینک</button><button class="btn btn-ghost" onclick="window.open(\'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(l.vless_link)+'\',\'_blank\')"><i class="ti ti-qrcode"></i> QR Code</button></div></div>'}}).join(''):'<div class="empty"><i class="ti ti-link-off"></i><p>کانفیگی در این گروه وجود ندارد</p></div>')+
 '<div style="margin-top:16px;text-align:center"><button class="btn btn-ghost" style="justify-content:center" onclick="location.reload()"><i class="ti ti-refresh"></i> بروزرسانی</button></div>';
 }}
 

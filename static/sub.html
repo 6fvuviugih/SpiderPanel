@@ -359,7 +359,7 @@
 (function() {
   var uname = window.location.pathname.split('/').filter(Boolean).pop();
   var apiUrl = '/api/sub/' + encodeURIComponent(uname);
-  var subUrl = window.location.origin + '/sub/' + uname;
+  var subUrl = '';  // built after API response with config_uuid
   var state = { data: null };
 
   /* ═══ NEON MOUSE TRAIL ═══ */
@@ -524,7 +524,6 @@
         '<div class="flex flex-col gap-stack-md overflow-y-auto pr-2 custom-scrollbar">' +
           (cfg ? buildStatusBlock() : '') +
           (buildConfigBlocks()) +
-          (buildTelegramProxyBlocks()) +
           (cfg ?
             '<div class="flex flex-wrap gap-2 mt-2">' +
               '<button onclick="copySub()" class="flex items-center gap-2 px-4 py-2 border border-black/10 dark:border-white/12 rounded-lg font-code-label text-code-label text-on-surface hover:bg-black/5 dark:hover:bg-white/5 transition-all duration-300 hover:scale-[1.02]">' +
@@ -644,25 +643,6 @@
     return blocks;
   }
 
-  function buildTelegramProxyBlocks() {
-    var tgLinks = window.__tgProxyLinks || [];
-    if (!tgLinks.length) return '';
-    var blocks = cfgSection('<span class="en-only">Telegram Proxy</span><span class="fa-only">پراکسی تلگرام</span>', tgLinks.length, '#0088cc');
-    tgLinks.forEach(function(item) {
-      blocks += '<div class="group border border-black/5 dark:border-white/12 bg-black/5 dark:bg-white/5 rounded-2xl p-stack-md flex justify-between items-center hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer relative overflow-hidden" onclick="copyText(\'' + esc(item.link) + '\')">' +
-        '<div class="absolute ltr:left-0 rtl:right-0 top-0 bottom-0 w-1 bg-[#0088cc] opacity-0 group-hover:opacity-100 transition-opacity neon-border"></div>' +
-        '<div class="flex flex-col gap-1 ltr:pl-2 rtl:pr-2 min-w-0">' +
-          '<div class="flex items-center gap-2">' +
-            '<span class="font-code-label text-code-label text-on-surface font-bold ltr:text-left rtl:text-right" dir="ltr">Telegram Proxy</span>' +
-            '<span class="px-2 py-0.5 rounded-full bg-black/10 dark:bg-white/10 font-code-label text-[10px] text-on-surface-variant">' + esc(item.inbound_name) + '</span>' +
-          '</div>' +
-          '<span class="cfg-text text-on-surface-variant truncate max-w-[130px] md:max-w-[320px] ltr:text-left rtl:text-right" dir="ltr">' + esc(item.link) + '</span>' +
-        '</div>' +
-      '</div>';
-    });
-    return blocks;
-  }
-
   function renderError(msg) {
     var app = document.getElementById('app');
     app.innerHTML =
@@ -682,6 +662,10 @@
       }
       var d = await r.json();
       state.data = d;
+      // Build subscription URL using config_uuid: domain/sub/uuid
+      if (d.config_uuid) {
+        subUrl = window.location.origin + '/sub/' + d.config_uuid;
+      }
       window.__cfg = d.config || d.vless_link || '';
       // The backend prepends a fake-stats status config (remark starts with the
       // 📊 emoji = %F0%9F%93%8A) to d.configs for subscription clients. This page
@@ -700,8 +684,6 @@
       // Sni Spoof for v2box configs
       window.__sniSpoofCfgs = Array.isArray(d.sni_spoof_configs) ? d.sni_spoof_configs : [];
       window.__sniSpoofCount = d.sni_spoof_count || 0;
-      // Telegram proxy links
-      window.__tgProxyLinks = Array.isArray(d.telegram_proxy_links) ? d.telegram_proxy_links : [];
       // Fake/status config: same VLESS format, remark carries the status stats.
       // Clearly marked STATUS so it is never mistaken for the real main config.
       if (window.__cfg) {

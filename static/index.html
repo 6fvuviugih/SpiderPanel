@@ -1011,6 +1011,8 @@ tr{animation:fadeIn .3s ease}
             <div class="scn-cfg">
               <div class="f-g"><label data-i18n="ipCount">تعداد IP</label><input type="number" id="scn-cf-count" value="30" min="1" max="100"></div>
               <div class="f-g"><label data-i18n="targetPort">پورت هدف</label><select id="scn-cf-port"><option value="443">443</option><option value="2053">2053</option><option value="8443">8443</option><option value="2083">2083</option></select></div>
+              <div class="f-g"><label>Tween (ms)</label><input type="number" id="scn-cf-delay" value="200" min="50" max="2000" step="50"></div>
+              <div class="f-g"><label>Timeout (s)</label><input type="number" id="scn-cf-timeout" value="1.0" min="0.3" max="5" step="0.1"></div>
               <button class="btn btn-p" onclick="scnRunCF()"><span data-i18n="startScan">شروع اسکن</span></button>
               <button class="btn btn-g" onclick="scnStop()"><span data-i18n="stop">توقف</span></button>
             </div>
@@ -1034,6 +1036,8 @@ tr{animation:fadeIn .3s ease}
             <div class="scn-cfg">
               <div class="f-g"><label data-i18n="ipCount">تعداد IP</label><input type="number" id="scn-rw-count" value="30" min="1" max="100"></div>
               <div class="f-g"><label data-i18n="targetPort">پورت هدف</label><select id="scn-rw-port"><option value="443">443</option><option value="8080">8080</option><option value="80">80</option></select></div>
+              <div class="f-g"><label>Tween (ms)</label><input type="number" id="scn-rw-delay" value="200" min="50" max="2000" step="50"></div>
+              <div class="f-g"><label>Timeout (s)</label><input type="number" id="scn-rw-timeout" value="1.0" min="0.3" max="5" step="0.1"></div>
               <button class="btn btn-p" onclick="scnRunRailway()"><span data-i18n="startScan">شروع اسکن</span></button>
               <button class="btn btn-g" onclick="scnStop()"><span data-i18n="stop">توقف</span></button>
             </div>
@@ -1194,12 +1198,12 @@ tr{animation:fadeIn .3s ease}
             <div class="f-g" style="margin-top:10px"><label data-i18n="cfToken">Cloudflare API Token</label>
               <div style="display:flex;gap:8px">
                 <input type="password" id="wk-token" dir="ltr" style="flex:1" autocomplete="off">
-                <a class="btn btn-sm btn-g" href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener" style="text-decoration:none;white-space:nowrap">
+                <a class="btn btn-sm btn-g" href="https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22zone%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22dns%22%2C%22type%22%3A%22edit%22%7D%5D&accountId=*&zoneId=all&name=spider-Token" target="_blank" rel="noopener" style="text-decoration:none;white-space:nowrap">
                   <span data-i18n="getToken">گرفتن توکن</span>
                 </a>
               </div>
             </div>
-            <div class="f-g"><label data-i18n="cfAccountId">Account ID</label><input type="text" id="wk-account" dir="ltr" placeholder="e.g. 1a2b3c..."></div>
+            <div class="px-hint" style="font-size:10px;color:var(--txt2);margin-bottom:6px">فقط توکن با دسترسی Zone:Read + DNS:Edit بسازید. نیازی به Account ID نیست — به‌صورت خودکار شناسایی می‌شود.</div>
             <div class="px-hint" data-i18n="workerAutoName">نام و دامنه Worker به‌صورت خودکار از اکانت Cloudflare گرفته می‌شود.</div>
             <button class="btn btn-p" style="width:100%;margin-top:10px" onclick="workerSetup()"><span data-i18n="cfConnect">اتصال و Deploy</span></button>
           </div>
@@ -1326,18 +1330,25 @@ tr{animation:fadeIn .3s ease}
   <form onsubmit="submitCreateUser(event)">
     <div class="f-r">
       <div class="f-g"><label data-i18n="username">نام کاربری</label><input type="text" id="cu-name" required></div>
-      <div class="f-g"><label data-i18n="conn">اتصال همزمان</label><input type="number" id="cu-conn" value="" placeholder="∞"></div>
+      <div class="f-g"><label data-i18n="conn">اتصال همزمان</label><input type="number" id="cu-conn" placeholder="∞ نامحدود"></div>
     </div>
     <div class="f-r">
-      <div class="f-g"><label data-i18n="volume">حجم</label><input type="number" id="cu-vol" value="" placeholder="∞"></div>
+      <div class="f-g"><label data-i18n="volume">حجم</label><input type="number" id="cu-vol" placeholder="∞ نامحدود"></div>
       <div class="f-g"><label data-i18n="unit">واحد</label><select id="cu-vol-u"><option value="GB">GB</option><option value="MB">MB</option></select></div>
-      <div class="f-g"><label data-i18n="expire">اعتبار</label><input type="number" id="cu-exp" value="" placeholder="∞"></div>
+      <div class="f-g"><label data-i18n="expire">اعتبار</label><input type="number" id="cu-exp" placeholder="∞ نامحدود"></div>
       <div class="f-g"><label data-i18n="unit">واحد</label><select id="cu-exp-u"><option value="days" data-i18n="day">روز</option><option value="months" data-i18n="month">ماه</option></select></div>
     </div>
     <div class="f-g">
       <label data-i18n="inboundsMulti">اینباندها (چندتایی)</label>
       <div class="px-hint" data-i18n="inboundPickHint">برای هر اینباند، گزینه‌های مخصوصش نمایش داده می‌شود: Worker → انتخاب کشور، TLS → سوییچ IP اسکنر، Reality → بدون گزینه.</div>
       <div id="cu-inbound" class="f-r" style="gap:8px;margin-top:6px"></div>
+    </div>
+    <div class="f-g" style="display:flex;align-items:center;gap:8px;margin-top:8px">
+      <div class="set-row" style="padding:8px 0;border-top:1px solid var(--border)">
+        <span class="set-lbl" data-i18n="sniSpoofV2box">Sni Spoof برای v2box</span>
+        <button type="button" class="ios-switch" id="cu-sni-spoof" onclick="cuToggleSniSpoof(this)" data-i18n-title="sniSpoofV2box" title="Sni Spoof"></button>
+      </div>
+      <div class="px-hint" data-i18n="sniSpoofV2boxHint" style="margin-top:-6px;margin-bottom:6px">وقتی فعال باشد، یک کپی از کانفیگ‌های اصلی TLS WS و Worker ساخته و snispoofing روی آن اعمال می‌شود. روی Reality/XHTTP Reality اعمال نمی‌شود.</div>
     </div>
     <div class="modal-btns">
       <button type="button" class="btn btn-g" onclick="closeModal('mod-user')"><span data-i18n="cancel">انصراف</span></button>
@@ -1378,11 +1389,18 @@ tr{animation:fadeIn .3s ease}
   <form onsubmit="submitInbound(event)">
     <input type="hidden" id="ib-id">
     <div class="f-g"><label data-i18n="inboundName">نام اینباند</label><input type="text" id="ib-name" required data-i18n-placeholder="inboundName" placeholder="مثال: Main-WS"></div>
-    <div class="f-g"><label data-i18n="intPort">پورت اصلی (پورتی که سرور روی آن گوش میدهد)</label><input type="number" id="ib-port" required placeholder="8443" dir="ltr"></div>
+    <div class="f-r">
+      <div class="f-g"><label data-i18n="intPort">پورت اصلی</label><input type="number" id="ib-port" required placeholder="8443" dir="ltr"></div>
+      <div class="f-g"><label>Protocol</label><select id="ib-protocol" onchange="onProtocolChange()">
+        <option value="vless">VLESS</option>
+        <option value="wireguard">WireGuard / AmneziaWG</option>
+        <option value="telegram">Telegram Proxy</option>
+      </select></div>
+    </div>
+    <div id="ib-tls-fields">
     <div class="f-g"><label data-i18n="securityType">امنیت</label><select id="ib-security" onchange="onSecurityChange()">
       <option value="tls">TLS</option>
       <option value="reality">Reality</option>
-      <option value="wireguard">WireGuard (AmneziaWG)</option>
     </select></div>
     <div style="font-size:10px;color:var(--txt2);margin-bottom:10px">پروتکل اینباند VLESS است؛ تنها امنیت را انتخاب کنید (TLS یا Reality).</div>
 
@@ -1391,6 +1409,7 @@ tr{animation:fadeIn .3s ease}
     <div class="f-r">
       <div class="f-g"><label data-i18n="extPortCfg">پورت خارجی (در آدرس کانفیگ)</label><input type="number" id="ib-extport" value="443" dir="ltr" placeholder="443"></div>
       <div class="f-g"><label>SNI</label><input type="text" id="ib-sni" value="is1-ssl.mzstatic.com" dir="ltr" readonly data-i18n-title="sniFixed" title="SNI هدف ثابت"></div>
+    </div>
     </div>
 
     <!-- Reality-only fields -->
@@ -1406,6 +1425,52 @@ tr{animation:fadeIn .3s ease}
       <div class="f-g"><label data-i18n="serverNames">Server Names (SNI)</label><input type="text" id="ib-servernames" value="is1-ssl.mzstatic.com" dir="ltr" data-i18n-placeholder="commaSep" placeholder="با کاما جدا کنید"></div>
       <div class="f-g"><label data-i18n="shortIds">Short IDs</label><div style="display:flex;gap:6px"><input type="text" id="ib-shortids" value="" dir="ltr" data-i18n-placeholder="hex8" placeholder="هگز ۸ رقمی — خالی = تصادفی" style="flex:1"><button type="button" class="btn btn-sm" onclick="generateShortId()" style="white-space:nowrap"><span data-i18n="generate">+ تولید</span></button></div></div>
       <div class="f-g"><label data-i18n="spiderx">SpiderX</label><input type="text" id="ib-spiderx" dir="ltr" placeholder="/" value="/"></div>
+    </div>
+
+    <!-- WireGuard / AmneziaWG fields -->
+    <div id="ib-wg-fields" class="hidden">
+      <div class="divider"></div>
+      <div style="font-size:11px;color:var(--neon);font-weight:700;margin-bottom:8px">AmneziaWG Settings</div>
+      <div class="f-g"><label>Endpoint</label>
+        <select id="ib-wg-endpoint" style="width:100%;padding:9px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:10px;color:var(--txt);font-size:12px;font-family:monospace">
+          <option value="">Loading...</option>
+        </select>
+      </div>
+      <div class="f-r">
+        <div class="f-g"><label>MTU</label><input type="number" id="ib-wg-mtu" value="1280" dir="ltr"></div>
+        <div class="f-g"><label>Address</label><input type="text" id="ib-wg-address" value="172.16.0.2/32" dir="ltr"></div>
+      </div>
+      <div class="f-g"><label>DNS</label><input type="text" id="ib-wg-dns" value="1.1.1.1,1.0.0.1" dir="ltr"></div>
+      <div class="f-g"><label>Server Public Key</label><input type="text" id="ib-wg-pubkey" dir="ltr" placeholder="Auto-generated"></div>
+      <button type="button" class="btn btn-sm btn-b" onclick="generateWGKeys()" style="width:100%;margin-bottom:10px">تولید کلید WireGuard</button>
+      <div style="font-size:10px;color:var(--txt2);margin-bottom:8px">AmneziaWG Parameters</div>
+      <div class="f-r">
+        <div class="f-g"><label>Jc</label><input type="number" id="ib-wg-jc" value="3" dir="ltr"></div>
+        <div class="f-g"><label>Jmin</label><input type="number" id="ib-wg-jmin" value="1" dir="ltr"></div>
+        <div class="f-g"><label>Jmax</label><input type="number" id="ib-wg-jmax" value="3" dir="ltr"></div>
+      </div>
+      <div class="f-r">
+        <div class="f-g"><label>S1</label><input type="number" id="ib-wg-s1" value="0" dir="ltr"></div>
+        <div class="f-g"><label>S2</label><input type="number" id="ib-wg-s2" value="0" dir="ltr"></div>
+      </div>
+      <div class="f-r">
+        <div class="f-g"><label>H1</label><input type="number" id="ib-wg-h1" value="1" dir="ltr"></div>
+        <div class="f-g"><label>H2</label><input type="number" id="ib-wg-h2" value="2" dir="ltr"></div>
+        <div class="f-g"><label>H3</label><input type="number" id="ib-wg-h3" value="3" dir="ltr"></div>
+        <div class="f-g"><label>H4</label><input type="number" id="ib-wg-h4" value="4" dir="ltr"></div>
+      </div>
+      <div class="f-g"><label>I1</label><input type="text" id="ib-wg-i1" dir="ltr" placeholder="Optional"></div>
+    </div>
+
+    <!-- Telegram Proxy fields -->
+    <div id="ib-tg-fields" class="hidden">
+      <div class="divider"></div>
+      <div style="font-size:11px;color:var(--neon);font-weight:700;margin-bottom:8px">Telegram Proxy Settings</div>
+      <div class="f-r">
+        <div class="f-g"><label>Internal Port</label><input type="number" id="ib-tg-intport" value="443" dir="ltr" placeholder="443"></div>
+        <div class="f-g"><label>External Port</label><input type="number" id="ib-tg-extport" value="443" dir="ltr" placeholder="443"></div>
+      </div>
+      <div class="f-g"><label>External Domain</label><input type="text" id="ib-tg-domain" dir="ltr" placeholder="proxy.example.com"></div>
     </div>
 
     <!-- Network group -->
@@ -1428,47 +1493,6 @@ tr{animation:fadeIn .3s ease}
       </div>
       <!-- gRPC fields -->
       <div id="ib-grpc-fields" class="hidden"><div class="f-g"><label data-i18n="serviceName">Service Name</label><input type="text" id="ib-grpc-svc" value="grpc" dir="ltr"></div></div>
-    </div>
-
-    <!-- WireGuard fields -->
-    <div id="ib-wireguard-fields" class="hidden">
-      <div class="divider"></div>
-      <div style="font-size:11px;color:var(--neon);font-weight:700;margin-bottom:8px">تنظیمات WireGuard (AmneziaWG)</div>
-      <div class="f-g">
-        <label>Endpoint</label>
-        <div style="position:relative">
-          <input type="text" id="ib-wg-endpoint" dir="ltr" placeholder="مثال: 8.6.112.4:4233" autocomplete="off" onclick="loadWgEndpoints()" oninput="filterWgEndpoints(this.value)" style="width:100%">
-          <div id="ib-wg-endpoint-dropdown" class="hidden" style="position:absolute;top:100%;left:0;right:0;max-height:250px;overflow-y:auto;background:rgba(20,20,25,0.95);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.1);border-radius:8px;z-index:100;margin-top:4px"></div>
-        </div>
-      </div>
-      <div class="f-r">
-        <div class="f-g"><label>MTU</label><input type="number" id="ib-wg-mtu" value="1280" dir="ltr"></div>
-        <div class="f-g"><label>DNS</label><input type="text" id="ib-wg-dns" value="1.1.1.1, 1.0.0.1" dir="ltr"></div>
-      </div>
-      <div class="divider"></div>
-      <div style="font-size:10px;color:var(--txt2);margin-bottom:8px">AmneziaWG Junk Packet Settings</div>
-      <div class="f-r">
-        <div class="f-g"><label>Jc</label><input type="number" id="ib-wg-jc" value="3" dir="ltr"></div>
-        <div class="f-g"><label>Jmin</label><input type="number" id="ib-wg-jmin" value="1" dir="ltr"></div>
-        <div class="f-g"><label>Jmax</label><input type="number" id="ib-wg-jmax" value="3" dir="ltr"></div>
-      </div>
-      <div class="f-r">
-        <div class="f-g"><label>S1</label><input type="number" id="ib-wg-s1" value="0" dir="ltr"></div>
-        <div class="f-g"><label>S2</label><input type="number" id="ib-wg-s2" value="0" dir="ltr"></div>
-      </div>
-      <div class="f-r">
-        <div class="f-g"><label>H1</label><input type="number" id="ib-wg-h1" value="1" dir="ltr"></div>
-        <div class="f-g"><label>H2</label><input type="number" id="ib-wg-h2" value="2" dir="ltr"></div>
-        <div class="f-g"><label>H3</label><input type="number" id="ib-wg-h3" value="3" dir="ltr"></div>
-        <div class="f-g"><label>H4</label><input type="number" id="ib-wg-h4" value="4" dir="ltr"></div>
-      </div>
-      <div class="divider"></div>
-      <div style="font-size:10px;color:var(--txt2);margin-bottom:8px">AmneziaWG V1.5 Init Padding (I1-I5)</div>
-      <div class="f-g"><label>I1 (hex)</label><input type="text" id="ib-wg-i1" dir="ltr" placeholder="خالی = غیرفعال"></div>
-      <div class="f-g"><label>I2 (hex)</label><input type="text" id="ib-wg-i2" dir="ltr" placeholder="خالی = غیرفعال"></div>
-      <div class="f-g"><label>I3 (hex)</label><input type="text" id="ib-wg-i3" dir="ltr" placeholder="خالی = غیرفعال"></div>
-      <div class="f-g"><label>I4 (hex)</label><input type="text" id="ib-wg-i4" dir="ltr" placeholder="خالی = غیرفعال"></div>
-      <div class="f-g"><label>I5 (hex)</label><input type="text" id="ib-wg-i5" dir="ltr" placeholder="خالی = غیرفعال"></div>
     </div>
 
     <div class="modal-btns">
@@ -1973,7 +1997,7 @@ function _userStatus(u) {
 function _userActions(u) {
   return '<div class="act-row">' +
     '<button class="btn btn-sm btn-g" onclick="viewCfg(\'' + esc(u.username) + '\')" title="Config">'+iconCfg+'</button>' +
-    '<button class="btn btn-sm btn-g" onclick="viewSub(\'' + u.config_uuid + '\')" title="Sub Link">'+iconLink+'</button>' +
+    '<button class="btn btn-sm btn-g" onclick="viewSub(\'' + u.username + '\')" title="Sub Link">'+iconLink+'</button>' +
     '<button class="btn btn-sm btn-b" onclick="viewQR(\'' + u.user_id + '\')" title="QR Code">'+iconQr+'</button>' +
     '<button class="btn btn-sm btn-b" onclick="editUser(\'' + u.user_id + '\')" title="Edit">'+iconEdit+'</button>' +
     '<button class="btn btn-sm btn-r" onclick="toggleUser(\'' + u.user_id + '\')" title="Toggle">'+iconToggle+'</button>' +
@@ -2020,6 +2044,7 @@ if (window.matchMedia) {
 // ─── User CRUD (SIMPLIFIED) ───
 async function openCreateUser() {
   cuInboundState = { picks: {}, countries: {} };
+  // Refresh worker proxy pool so the country dropdowns are current, then render.
   if (typeof loadWorker === 'function') {
     try { await loadWorker(); } catch(e) {}
   }
@@ -2030,7 +2055,12 @@ async function openCreateUser() {
   $id('cu-exp').value = '';
   $id('cu-exp-u').value = 'days';
   $id('cu-conn').value = '';
+  var sniSw = $id('cu-sni-spoof'); if (sniSw) sniSw.classList.remove('on');
   openModal('mod-user');
+}
+
+function cuToggleSniSpoof(el) {
+  el.classList.toggle('on');
 }
 
 async function submitCreateUser(e) {
@@ -2044,6 +2074,13 @@ async function submitCreateUser(e) {
   var cuCountries = cuWorkerCountries();  // { inboundId: [codes] }
   var cfIds = inbound_ids.filter(function(i){ return cuSw[i] && cuSw[i].cf; });
   var rwIds = inbound_ids.filter(function(i){ return cuSw[i] && cuSw[i].railway; });
+  var sniSpoof = $id('cu-sni-spoof') ? $id('cu-sni-spoof').classList.contains('on') : false;
+  // Get spoof settings from localStorage
+  var fakeSni = '', spoofIp = '';
+  try {
+    var saved = localStorage.getItem('spider-spoof-settings');
+    if (saved) { var s = JSON.parse(saved); fakeSni = s.fakeSni || ''; spoofIp = s.spoofIp || ''; }
+  } catch(e) {}
   // Aggregate selected countries across ALL worker inbounds so every country
   // picked in any worker inbound's dropdown produces its own /route/{code} config.
   var allCountries = [];
@@ -2064,11 +2101,16 @@ async function submitCreateUser(e) {
       username: $id('cu-name').value,
       traffic_limit_gb: vu === 'GB' ? v : v / 1024,
       expire_days: eu === 'months' ? ex * 30 : ex,
-      concurrent_connections: parseInt($id('cu-conn').value) || 2,
+      concurrent_connections: parseInt($id('cu-conn').value) || 0,
       inbound_ids: inbound_ids,
       proxy_countries: allCountries,
       proxy_country: firstCountry,
       proxy_ip_enabled: !!allCountries.length,
+      // Mark which inbounds want scanned custom-IP configs (worker→cf, tls→railway).
+      custom_ip_inbounds: { cf: cfIds, railway: rwIds },
+      sni_spoof_v2box: sniSpoof,
+      fake_sni: fakeSni,
+      spoof_ip: spoofIp
     }});
     toast(r.username + ' ' + t('userCreated'), 'ok');
     closeModal('mod-user');
@@ -2176,7 +2218,7 @@ function copyCfg() {
   navigator.clipboard.writeText(curCfg).then(function() { toast(t('copied'), 'ok'); }).catch(function() { toast(t('errCopy'), 'err'); });
 }
 
-function viewSub(configUuid) { window.open('/sub/' + configUuid, '_blank'); }
+function viewSub(username) { window.open('/sub/' + username, '_blank'); }
 function viewQR(userId) { $id('qr-img').src = '/api/users/' + userId + '/qr?t=' + Date.now(); openModal('mod-qr'); }
 
 // ─── Inbounds ───
@@ -2255,21 +2297,20 @@ function selectedInboundIds() {
 function onSecurityChange() {
   var sec = $id('ib-security').value;
   var realF = $id('ib-reality-fields');
-  var wgF = $id('ib-wireguard-fields');
-  var netWrap = $id('ib-net-wrap');
-  if (sec === 'reality') {
-    realF.classList.remove('hidden');
-    if (wgF) wgF.classList.add('hidden');
-    if (netWrap) netWrap.classList.remove('hidden');
-  } else if (sec === 'wireguard') {
-    realF.classList.add('hidden');
-    if (wgF) wgF.classList.remove('hidden');
-    if (netWrap) netWrap.classList.add('hidden');
-  } else {
-    realF.classList.add('hidden');
-    if (wgF) wgF.classList.add('hidden');
-    if (netWrap) netWrap.classList.remove('hidden');
-  }
+  if (sec === 'reality') { realF.classList.remove('hidden'); }
+  else { realF.classList.add('hidden'); }
+}
+
+function onProtocolChange() {
+  var proto = $id('ib-protocol').value;
+  var isWg = proto === 'wireguard';
+  var isTg = proto === 'telegram';
+  var isTls = !isWg && !isTg;
+  toggleById('ib-tls-fields', isTls);
+  toggleById('ib-net-wrap', isTls);
+  toggleById('ib-wg-fields', isWg);
+  toggleById('ib-tg-fields', isTg);
+  if (isWg) loadWGEndpoints();
 }
 
 function onNetworkChange() {
@@ -2281,41 +2322,26 @@ function onNetworkChange() {
 
 function toggleById(id, show) { var el = $id(id); if (el) { if (show) el.classList.remove('hidden'); else el.classList.add('hidden'); } }
 
-var WG_ENDPOINTS = [];
-async function loadWgEndpoints() {
-  if (WG_ENDPOINTS.length) { renderWgEndpoints(WG_ENDPOINTS); return; }
+async function loadWGEndpoints() {
   try {
-    var r = await api('/api/wireguard/endpoints');
-    WG_ENDPOINTS = r.endpoints || [];
-    renderWgEndpoints(WG_ENDPOINTS);
-  } catch(e) { WG_ENDPOINTS = []; }
+    var r = await api('/api/wg/endpoints');
+    var sel = $id('ib-wg-endpoint');
+    if (!sel) return;
+    var eps = r.endpoints || [];
+    sel.innerHTML = eps.length
+      ? eps.map(function(e) { return '<option value="' + esc(e) + '">' + esc(e) + '</option>'; }).join('')
+      : '<option value="">No endpoints found</option>';
+  } catch(e) { console.error(e); }
 }
-function renderWgEndpoints(list) {
-  var dd = $id('ib-wg-endpoint-dropdown');
-  if (!dd) return;
-  if (!list.length) { dd.classList.add('hidden'); return; }
-  dd.innerHTML = list.map(function(ep) {
-    return '<div class="wg-ep-item" onclick="selectWgEndpoint(\'' + esc(ep) + '\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.05);font-size:12px;font-family:monospace;color:var(--txt);transition:background 0.15s" onmouseover="this.style.background=\'rgba(255,255,255,0.06)\'" onmouseout="this.style.background=\'transparent\'">' +
-      '<span style="color:var(--neon);margin-right:6px">✓</span> ' + esc(ep) + '</div>';
-  }).join('');
-  dd.classList.remove('hidden');
+
+async function generateWGKeys() {
+  try {
+    var r = await api('/api/tools/generate-reality-keys', {method: 'POST'});
+    // Reuse x25519 keygen for WireGuard keys (same curve)
+    if (r.private_key) $id('ib-wg-pubkey').value = r.public_key || '';
+    toast('WireGuard keys generated', 'ok');
+  } catch(e) { toast('Key generation failed', 'err'); }
 }
-function filterWgEndpoints(val) {
-  val = (val || '').toLowerCase();
-  var filtered = WG_ENDPOINTS.filter(function(ep) { return ep.toLowerCase().indexOf(val) !== -1; });
-  renderWgEndpoints(filtered);
-}
-function selectWgEndpoint(ep) {
-  var inp = $id('ib-wg-endpoint');
-  if (inp) inp.value = ep;
-  var dd = $id('ib-wg-endpoint-dropdown');
-  if (dd) dd.classList.add('hidden');
-}
-document.addEventListener('click', function(e) {
-  var dd = $id('ib-wg-endpoint-dropdown');
-  var inp = $id('ib-wg-endpoint');
-  if (dd && inp && !dd.contains(e.target) && e.target !== inp) dd.classList.add('hidden');
-});
 
 function onDomainChange() {
   var d = $id('ib-domain').value;
@@ -2349,42 +2375,20 @@ async function generateShortId() {
 }
 
 function openCreateInbound() {
-  $id('ib-title').textContent = t('createInbound');
-  $id('ib-id').value = '';
-  $id('ib-name').value = '';
-  $id('ib-sni').value = 'www.hcaptcha.com';
-  $id('ib-privkey').value = '';
-  $id('ib-pubkey').value = '';
-  $id('ib-shortids').value = '';
-  $id('ib-spiderx').value = '/';
-  $id('ib-dest').value = 'is1-ssl.mzstatic.com:443';
-  $id('ib-servernames').value = 'is1-ssl.mzstatic.com';
-  $id('ib-wspath').value = '/';
-  $id('ib-xhttppath').value = '/';
-  $id('ib-xhttp-mode').value = 'auto';
-  $id('ib-grpc-svc').value = 'grpc';
-  $id('ib-security').value = 'tls';
-  $id('ib-network').value = 'ws';
-  $id('ib-port').value = '443';
-  $id('ib-extdomain').value = '';
-  $id('ib-extport').value = '443';
-  // Reset wireguard fields
-  var wgFields = ['ib-wg-endpoint','ib-wg-mtu','ib-wg-dns','ib-wg-jc','ib-wg-jmin','ib-wg-jmax','ib-wg-s1','ib-wg-s2','ib-wg-h1','ib-wg-h2','ib-wg-h3','ib-wg-h4','ib-wg-i1','ib-wg-i2','ib-wg-i3','ib-wg-i4','ib-wg-i5'];
-  wgFields.forEach(function(f) { var el = $id(f); if (el) el.value = el.id === 'ib-wg-mtu' ? '1280' : el.id === 'ib-wg-dns' ? '1.1.1.1, 1.0.0.1' : (['ib-wg-jc','ib-wg-jmax'].indexOf(f) !== -1 ? '3' : ['ib-wg-h2'].indexOf(f) !== -1 ? '2' : ['ib-wg-h3'].indexOf(f) !== -1 ? '3' : ['ib-wg-h4'].indexOf(f) !== -1 ? '4' : ['ib-wg-h1'].indexOf(f) !== -1 ? '1' : '0'); });
-  $id('ib-submit').textContent = t('createInbound');
-  onSecurityChange();
-  onNetworkChange();
-  openModal('mod-inbound');
+  // Adding new inbounds is disabled — only the default inbounds are used.
+  toast(t('inboundFixed'), 'warn');
 }
 
 function editInbound(iid) {
   var ib = ALL_IB.find(function(x) { return x.inbound_id === iid; });
   if (!ib) return;
   var isReality = (ib.protocol === 'reality' || ib.security === 'reality');
-  var isWireguard = (ib.security === 'wireguard' || (ib.protocol || '').toLowerCase() === 'wireguard');
+  var isWg = (ib.protocol || '').toLowerCase() === 'wireguard';
+  var isTg = (ib.protocol || '').toLowerCase() === 'telegram';
   $id('ib-title').textContent = t('editInbound');
   $id('ib-id').value = iid;
   $id('ib-name').value = ib.name || '';
+  $id('ib-protocol').value = ib.protocol || 'vless';
   $id('ib-sni').value = ib.sni || 'is1-ssl.mzstatic.com';
   var rs = ib.reality_settings || {};
   $id('ib-privkey').value = (rs || {}).private_key || '';
@@ -2399,33 +2403,36 @@ function editInbound(iid) {
   $id('ib-xhttp-mode').value = xh.mode || 'auto';
   $id('ib-grpc-svc').value = (ib.grpc_settings || {}).serviceName || 'grpc';
 
-  if (isWireguard) {
-    // WireGuard: fill all WG fields from inbound settings.
-    var wgs = ib.wireguard_settings || {};
-    $id('ib-security').value = 'wireguard';
-    $id('ib-wg-endpoint').value = wgs.endpoint || '';
-    $id('ib-wg-mtu').value = wgs.mtu || '1280';
-    $id('ib-wg-dns').value = wgs.dns || '1.1.1.1, 1.0.0.1';
-    $id('ib-wg-jc').value = wgs.jc || '3';
-    $id('ib-wg-jmin').value = wgs.jmin || '1';
-    $id('ib-wg-jmax').value = wgs.jmax || '3';
-    $id('ib-wg-s1').value = wgs.s1 || '0';
-    $id('ib-wg-s2').value = wgs.s2 || '0';
-    $id('ib-wg-h1').value = wgs.h1 || '1';
-    $id('ib-wg-h2').value = wgs.h2 || '2';
-    $id('ib-wg-h3').value = wgs.h3 || '3';
-    $id('ib-wg-h4').value = wgs.h4 || '4';
-    $id('ib-wg-i1').value = wgs.i1 || '';
-    $id('ib-wg-i2').value = wgs.i2 || '';
-    $id('ib-wg-i3').value = wgs.i3 || '';
-    $id('ib-wg-i4').value = wgs.i4 || '';
-    $id('ib-wg-i5').value = wgs.i5 || '';
-    $id('ib-port').value = ib.port || '51820';
-    $id('ib-extdomain').value = ib.external_domain || '';
-    $id('ib-extport').value = ib.external_port || '51820';
+  if (isWg) {
+    // WireGuard: populate WG-specific fields
+    var wg = ib.wireguard_settings || {};
+    $id('ib-port').value = ib.port || 51820;
+    $id('ib-wg-mtu').value = wg.mtu || '1280';
+    $id('ib-wg-address').value = wg.address || '172.16.0.2/32';
+    $id('ib-wg-dns').value = wg.dns || '1.1.1.1,1.0.0.1';
+    $id('ib-wg-pubkey').value = wg.server_public_key || '';
+    $id('ib-wg-jc').value = wg.jc || '3';
+    $id('ib-wg-jmin').value = wg.jmin || '1';
+    $id('ib-wg-jmax').value = wg.jmax || '3';
+    $id('ib-wg-s1').value = wg.s1 || '0';
+    $id('ib-wg-s2').value = wg.s2 || '0';
+    $id('ib-wg-h1').value = wg.h1 || '1';
+    $id('ib-wg-h2').value = wg.h2 || '2';
+    $id('ib-wg-h3').value = wg.h3 || '3';
+    $id('ib-wg-h4').value = wg.h4 || '4';
+    $id('ib-wg-i1').value = wg.i1 || '';
     $id('ib-submit').textContent = t('updateInbound');
-    onSecurityChange();
-    onNetworkChange();
+    onProtocolChange();
+    openModal('mod-inbound');
+  } else if (isTg) {
+    // Telegram Proxy: populate TG-specific fields
+    var tg = ib.telegram_settings || {};
+    $id('ib-port').value = ib.port || 443;
+    $id('ib-tg-intport').value = tg.internal_port || ib.port || 443;
+    $id('ib-tg-extport').value = tg.external_port || ib.external_port || 443;
+    $id('ib-tg-domain').value = tg.external_domain || ib.external_domain || '';
+    $id('ib-submit').textContent = t('updateInbound');
+    onProtocolChange();
     openModal('mod-inbound');
   } else if (isReality) {
     // Reality: user fills domain + ports; pbk is auto-generated.
@@ -2435,6 +2442,7 @@ function editInbound(iid) {
     $id('ib-extdomain').value = ib.external_domain || '';
     $id('ib-extport').value = ib.external_port || '';
     $id('ib-submit').textContent = t('updateInbound');
+    onProtocolChange();
     onSecurityChange();
     onNetworkChange();
     openModal('mod-inbound');
@@ -2449,41 +2457,23 @@ async function submitInbound(e) {
   var btn = $id('ib-submit'); btn.disabled = true;
   btn.textContent = t('saving');
   var iid = $id('ib-id').value;
-  var network = $id('ib-network').value;
-  var security = $id('ib-security').value;
-  var sni = $id('ib-sni').value || 'is1-ssl.mzstatic.com';
+  var proto = $id('ib-protocol').value;
+  var isWg = proto === 'wireguard';
 
-  // All inbounds are VLESS now (except WireGuard).
-  var isWireguard = (security === 'wireguard');
   var body = {
     name: $id('ib-name').value,
-    protocol: isWireguard ? 'wireguard' : 'vless',
-    port: parseInt($id('ib-port').value) || (isWireguard ? 51820 : 8443),
-    external_port: parseInt($id('ib-extport').value) || null,
-    external_domain: $id('ib-extdomain').value || '',
-    network: isWireguard ? 'udp' : network,
-    security: security,
-    sni: sni
+    protocol: proto,
+    port: parseInt($id('ib-port').value) || (isWg ? 51820 : 8443),
   };
 
-  // Reality settings
-  if (security === 'reality') {
-    body.reality_settings = {
-      private_key: $id('ib-privkey').value || '',
-      public_key: $id('ib-pubkey').value || '',
-      dest: $id('ib-dest').value || 'is1-ssl.mzstatic.com:443',
-      server_names: ($id('ib-servernames').value || '').split(',').map(function(s){return s.trim()}).filter(Boolean),
-      short_ids: $id('ib-shortids').value || '',
-      spiderx: $id('ib-spiderx').value || '/'
-    };
-  }
-
-  // WireGuard settings
-  if (isWireguard) {
+  if (isWg) {
+    // WireGuard inbound
     body.wireguard_settings = {
       endpoint: $id('ib-wg-endpoint').value || '',
       mtu: $id('ib-wg-mtu').value || '1280',
-      dns: $id('ib-wg-dns').value || '1.1.1.1, 1.0.0.1',
+      address: $id('ib-wg-address').value || '172.16.0.2/32',
+      dns: $id('ib-wg-dns').value || '1.1.1.1,1.0.0.1',
+      server_public_key: $id('ib-wg-pubkey').value || '',
       jc: $id('ib-wg-jc').value || '3',
       jmin: $id('ib-wg-jmin').value || '1',
       jmax: $id('ib-wg-jmax').value || '3',
@@ -2493,24 +2483,49 @@ async function submitInbound(e) {
       h2: $id('ib-wg-h2').value || '2',
       h3: $id('ib-wg-h3').value || '3',
       h4: $id('ib-wg-h4').value || '4',
-      i1: $id('ib-wg-i1').value || '',
-      i2: $id('ib-wg-i2').value || '',
-      i3: $id('ib-wg-i3').value || '',
-      i4: $id('ib-wg-i4').value || '',
-      i5: $id('ib-wg-i5').value || '',
+      i1: $id('ib-wg-i1').value || ''
     };
-  }
+  } else if (proto === 'telegram') {
+    // Telegram Proxy inbound
+    body.telegram_settings = {
+      internal_port: parseInt($id('ib-tg-intport').value) || 443,
+      external_port: parseInt($id('ib-tg-extport').value) || 443,
+      external_domain: $id('ib-tg-domain').value || ''
+    };
+    body.port = parseInt($id('ib-tg-intport').value) || 443;
+    body.external_port = parseInt($id('ib-tg-extport').value) || 443;
+    body.external_domain = $id('ib-tg-domain').value || '';
+  } else {
+    // VLESS / TLS / Reality
+    var network = $id('ib-network').value;
+    var security = $id('ib-security').value;
+    var sni = $id('ib-sni').value || 'is1-ssl.mzstatic.com';
+    body.network = network;
+    body.security = security;
+    body.sni = sni;
+    body.external_port = parseInt($id('ib-extport').value) || null;
+    body.external_domain = $id('ib-extdomain').value || '';
 
-  // Network settings
-  if (network === 'ws') {
-    body.ws_settings = { path: $id('ib-wspath').value || '/' };
-  } else if (network === 'xhttp') {
-    body.xhttp_settings = {
-      path: $id('ib-xhttppath').value || '/',
-      mode: $id('ib-xhttp-mode').value || 'auto'
-    };
-  } else if (network === 'grpc') {
-    body.grpc_settings = { serviceName: $id('ib-grpc-svc').value || 'grpc' };
+    if (security === 'reality') {
+      body.reality_settings = {
+        private_key: $id('ib-privkey').value || '',
+        public_key: $id('ib-pubkey').value || '',
+        dest: $id('ib-dest').value || 'is1-ssl.mzstatic.com:443',
+        server_names: ($id('ib-servernames').value || '').split(',').map(function(s){return s.trim()}).filter(Boolean),
+        short_ids: $id('ib-shortids').value || '',
+        spiderx: $id('ib-spiderx').value || '/'
+      };
+    }
+    if (network === 'ws') {
+      body.ws_settings = { path: $id('ib-wspath').value || '/' };
+    } else if (network === 'xhttp') {
+      body.xhttp_settings = {
+        path: $id('ib-xhttppath').value || '/',
+        mode: $id('ib-xhttp-mode').value || 'auto'
+      };
+    } else if (network === 'grpc') {
+      body.grpc_settings = { serviceName: $id('ib-grpc-svc').value || 'grpc' };
+    }
   }
 
   try {
@@ -2644,17 +2659,9 @@ function togglePanelAudio(){var p=$id('panel-audio-player');var sw=$id('audio-au
 function loadProxyCountries(){}  // kept as no-op for loadAll()
 
 // ═══ IP SCANNER ═══
-var SCN_CF_RANGES = [
-  [172, 64, 0, 0, 13], [104, 16, 0, 0, 12], [162, 159, 0, 0, 16], [108, 162, 192, 0, 18],
-  [104, 16, 24, 0, 14], [172, 67, 10, 0, 15], [162, 159, 36, 0, 16], [108, 162, 192, 0, 18],
-  [104, 18, 45, 0, 14], [172, 64, 50, 0, 14], [104, 16, 0, 0, 12], [162, 159, 0, 0, 16]
-];
-var SCN_RW_RANGES = [
-  [66, 33, 22, 0, 23], [66, 33, 23, 0, 24], [69, 46, 46, 0, 24],
-  [152, 55, 176, 0, 22], [152, 55, 180, 0, 22], [152, 55, 184, 0, 22],
-  [162, 220, 232, 0, 23], [162, 220, 234, 0, 23],
-  [208, 77, 244, 0, 23], [208, 77, 246, 0, 23]
-];
+var SCN_CF_RANGES = [];
+var SCN_RW_RANGES = [];
+var SCN_SNI_LIST = [];
 var SCN_DOM_DEFAULTS = [
   'shuttle.proxy.rlwy.net', 'monorail.proxy.rlwy.net', 'caboose.proxy.rlwy.net',
   'viaduct.proxy.rlwy.net', 'acela.proxy.rlwy.net', 'sakura.proxy.rlwy.net',
@@ -2663,6 +2670,26 @@ var SCN_DOM_DEFAULTS = [
 ];
 var SCN_STOP = false;
 var scnCtx = { cf: {found: [], tried: 0, gen: 0, seq: 0}, railway: {found: [], tried: 0, gen: 0, seq: 0} };
+
+// Load CF subnets dynamically from server
+async function scnLoadRanges() {
+  try {
+    var r = await api('/api/scanner/cf-subnets');
+    if (r.subnets && r.subnets.length) {
+      SCN_CF_RANGES = r.subnets.map(function(s) {
+        var parts = s.split('/')[0].split('.');
+        var mask = parseInt(s.split('/')[1]) || 24;
+        return [parseInt(parts[0])||0, parseInt(parts[1])||0, parseInt(parts[2])||0, parseInt(parts[3])||0, mask];
+      });
+    }
+  } catch(e) { console.error('Failed to load CF subnets:', e); }
+  // Fallback ranges if API fails
+  if (!SCN_CF_RANGES.length) {
+    SCN_CF_RANGES = [[104, 16, 0, 0, 12], [172, 64, 0, 0, 13], [162, 159, 0, 0, 16]];
+  }
+  SCN_RW_RANGES = [[66, 33, 22, 0, 23], [66, 33, 23, 0, 24], [152, 55, 176, 0, 22]];
+}
+scnLoadRanges();
 
 // ═══ SPOOF SCANNER ═══
 // Cloudflare IP ranges from cf_subnets.txt
@@ -2807,7 +2834,10 @@ async function scnRunIPs(which) {
   var tried = 0;
   var live = {};   // ip -> {ms, ok} of last attempt (success and failure both shown)
   var loops = 0;
-  var BATCH = 32;  // bigger batches = faster coverage
+  var BATCH = 32;
+  var pfx = which === 'cf' ? 'scn-cf' : 'scn-rw';
+  var scanDelay = parseInt($id(pfx + '-delay').value) || 200;
+  var scanTimeout = parseFloat($id(pfx + '-timeout').value) || 1.0;
   while (found.length < count && loops < count * 20) {
     if (SCN_STOP) break;
     loops++;
@@ -2815,7 +2845,11 @@ async function scnRunIPs(which) {
     for (var b = 0; b < BATCH && found.length + batch.length < count * 3; b++) {
       batch.push(scnRandIp(ranges[Math.floor(Math.random() * ranges.length)]) + ':' + port);
     }
-    var resMap = await scnPingBatch(batch, 0.9);  // short timeout = fast cycle
+    var resMap = await scnPingBatch(batch, scanTimeout);
+    // Rate limit: delay between batches to avoid flood behavior
+    if (scanDelay > 0 && loops < count * 20) {
+      await new Promise(function(resolve) { setTimeout(resolve, scanDelay); });
+    }
     Object.keys(resMap).forEach(function(t) {
       tried++;
       var r = resMap[t];
@@ -3466,13 +3500,12 @@ function wkDeleteSelected() {
 
 async function workerSetup() {
   var token = ($id('wk-token').value || '').trim();
-  var account = ($id('wk-account').value || '').trim();
-  if (!token || !account) { toast(t('workerFillAll'), 'err'); return; }
+  if (!token) { toast('Token is required', 'err'); return; }
   var btn = null;
   document.querySelectorAll('#worker-setup .btn-p').forEach(function(b){ btn = b; });
   if (btn) { btn.disabled = true; btn.textContent = t('connecting'); }
   try {
-    var w = await api('/api/worker/setup', {method: 'POST', body: {token: token, account_id: account}});
+    var w = await api('/api/worker/setup', {method: 'POST', body: {token: token}});
     $id('wk-token').value = '';
     toast(t('workerConnected'), 'ok');
     await loadWorker();
@@ -3667,6 +3700,16 @@ function cuRenderInboundOpts() {
         html += '<div class="set-row" style="padding:0;border:none;flex-wrap:wrap">' +
           '<span class="set-lbl" style="width:100%">' + t('workerCountries') + '</span>' +
           '<div style="display:flex;flex-wrap:wrap;gap:6px;direction:ltr;text-align:left">' + chipHtml + '</div>' +
+        '</div>' +
+        '<div class="set-row" style="padding:0;border:none">' +
+          '<span class="set-lbl" style="font-size:11px">' + t('addCfIps') + '</span>' +
+          '<button type="button" class="ios-switch' + (sel.cf ? ' on' : '') + '" data-type="cf" onclick="cuToggleIpSwitch(\'' + esc(id) + '\',this)"></button>' +
+        '</div>';
+      } else if (type === 'tls') {
+        var selt = cuInboundState.countries[id] || {};
+        html += '<div class="set-row" style="padding:0;border:none">' +
+          '<span class="set-lbl" style="font-size:11px">' + t('addRailwayIps') + '</span>' +
+          '<button type="button" class="ios-switch' + (selt.railway ? ' on' : '') + '" data-type="railway" onclick="cuToggleIpSwitch(\'' + esc(id) + '\',this)"></button>' +
         '</div>';
       } else {
         html += '<div class="px-hint" style="margin:0">' + t('realityNoExtra') + '</div>';

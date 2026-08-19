@@ -88,17 +88,6 @@ _SCANNED_MAX = 10
 # clear() can never be overwritten by a scan save that was already in flight.
 SCANNED_SEQ: dict = {}
 
-# ── WireGuard endpoints ──────────────────────────────────────────────────────
-ENDPOINTS_FILE = Path(os.path.dirname(os.path.abspath(__file__))) / "data" / "endpoints.txt"
-
-
-def _load_endpoints() -> list:
-    """Load WireGuard endpoints from the endpoints.txt file."""
-    if not ENDPOINTS_FILE.is_file():
-        return []
-    lines = ENDPOINTS_FILE.read_text(errors="ignore").splitlines()
-    return [line.strip() for line in lines if line.strip() and not line.startswith("#")]
-
 
 def _read_scanned_ips(ctype: str) -> list:
     """Return the saved ip:port entries for a scanned source (first 10)."""
@@ -442,7 +431,7 @@ WORKER_LOCK = asyncio.Lock()
 WORKER_SYNC_LOCK = asyncio.Lock()
 
 # پروتکل‌های پشتیبانی‌شده برای هر کانفیگ
-PROTOCOLS = ("vless-ws", "xhttp-packet-up", "xhttp-stream-up", "xhttp-stream-one", "telegram-proxy")
+PROTOCOLS = ("vless-ws", "xhttp-packet-up", "xhttp-stream-up", "xhttp-stream-one")
 
 USER_PROTOCOLS = ("vless", "vmess", "trojan", "shadowsocks", "reality")
 DEFAULT_PROTOCOL = "vless-ws"
@@ -634,6 +623,121 @@ def _xray_x25519_privkey_norm(private_key: str) -> str:
         return b64.urlsafe_b64encode(decoded).decode().rstrip("=")
     except Exception:
         return ""
+
+
+# ── WireGuard / AmneziaWG helpers ────────────────────────────────────────────
+def _wg_gen_keypair() -> tuple:
+    """Generate a WireGuard key pair (private, public) using Python crypto."""
+    try:
+        from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+        import base64 as b64
+        priv = X25519PrivateKey.generate()
+        priv_bytes = priv.private_bytes_raw()
+        pub_bytes = priv.public_key().public_bytes_raw()
+        return (
+            b64.b64encode(priv_bytes).decode(),
+            b64.b64encode(pub_bytes).decode(),
+        )
+    except ImportError:
+        return "", ""
+
+
+def _wg_read_endpoints() -> list:
+    """Read available endpoints from data/endpoint.txt."""
+    ep_file = Path(os.path.dirname(os.path.abspath(__file__))) / "data" / "endpoint.txt"
+    if not ep_file.is_file():
+        ep_file = DATA_DIR / "endpoint.txt"
+    if not ep_file.is_file():
+        return []
+    out = []
+    for line in ep_file.read_text(errors="ignore").splitlines():
+        line = line.strip()
+        if line and ":" in line and not line.startswith("#"):
+            out.append(line)
+    return out
+
+
+def generate_wg_config(user_id: str, user: dict, inbound: dict, remark_tag: str = None) -> str:
+    """Generate an AmneziaWG config for a user based on the inbound settings."""
+    username = user.get("username", user_id)
+    wg = inbound.get("wireguard_settings") or {}
+
+    # Generate per-user WireGuard keys
+    priv_key, pub_key = _wg_gen_keypair()
+    if not priv_key:
+        return ""
+
+    # Inbound server keys (from wireguard_settings)
+    server_pub = wg.get("server_public_key") or ""
+    if not server_pub:
+        # Generate server keys if not set
+        _, server_pub = _wg_gen_keypair()
+
+    endpoint = wg.get("endpoint") or "8.6.112.4:443"
+    mtu = wg.get("mtu") or "1280"
+    address = wg.get("address") or "172.16.0.2/32"
+    dns = wg.get("dns") or "1.1.1.1,1.0.0.1"
+
+    # AmneziaWG parameters
+    jc = wg.get("jc") or "3"
+    jmin = wg.get("jmin") or "1"
+    jmax = wg.get("jmax") or "3"
+    s1 = wg.get("s1") or "0"
+    s2 = wg.get("s2") or "0"
+    h1 = wg.get("h1") or "1"
+    h2 = wg.get("h2") or "2"
+    h3 = wg.get("h3") or "3"
+    h4 = wg.get("h4") or "4"
+    i1 = wg.get("i1") or ""
+
+    rem = f"Spider-{username}-WG"
+    if remark_tag:
+        rem = f"{rem} {remark_tag}"
+
+    config = f"""# AmneziaWG Config
+[Interface]
+PrivateKey = {priv_key}
+Address = {address}
+DNS = {dns}
+MTU = {mtu}
+Jc = {jc}
+Jmin = {jmin}
+Jmax = {jmax}
+S1 = {s1}
+S2 = {s2}
+H1 = {h1}
+H2 = {h2}
+H3 = {h3}
+H4 = {h4}
+I1 = {i1}
+
+[Peer]
+PublicKey = {server_pub}
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = {endpoint}
+"""
+    return config.strip()
+
+
+def generate_telegram_proxy_link(user_id: str, user: dict, inbound: dict, remark_tag: str = None) -> str:
+    """Generate a Telegram Proxy link for a user based on the inbound settings."""
+    username = user.get("username", user_id)
+    tg = inbound.get("telegram_settings") or {}
+
+    external_domain = tg.get("external_domain") or inbound.get("external_domain") or ""
+    external_port = tg.get("external_port") or inbound.get("external_port") or "443"
+    if not external_domain:
+        return ""
+
+    # Generate a unique secret for this user (hex string)
+    secret = secrets.token_hex(16)
+
+    rem = f"Spider-{username}-TG"
+    if remark_tag:
+        rem = f"{rem} {remark_tag}"
+
+    link = f"https://t.me/proxy?server={external_domain}&port={external_port}&secret={secret}"
+    return link
 
 
 XRAY_URL = "https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip"
@@ -1168,14 +1272,22 @@ def generate_user_config(user_id: str, user: dict, inbound_id: str = None, addr:
 
     # ── WORKER (multi-location via Cloudflare Worker) ──
     if proto == "worker":
-        wcfgs = _worker_configs(user_id, user, inbound, "", remark, addr_ip, addr_port)
+        wcfgs = _worker_configs(user_id, user, inbound, "", remark_tag, addr_ip, addr_port)
         if wcfgs:
             return wcfgs[0]
         return ""
 
     # ── WIREGUARD / AmneziaWG ──
     if proto == "wireguard":
-        return generate_amneziawg_config(user, inbound)
+        if not inbound:
+            return ""
+        return generate_wg_config(user_id, user, inbound, remark_tag)
+
+    # ── TELEGRAM PROXY ──
+    if proto == "telegram":
+        if not inbound:
+            return ""
+        return generate_telegram_proxy_link(user_id, user, inbound, remark_tag)
 
     # ── REALITY (served by Xray core) ──
     if proto == "reality" or sec == "reality":
@@ -1266,127 +1378,6 @@ def generate_user_config(user_id: str, user: dict, inbound_id: str = None, addr:
         if sni_spoof:
             params += f"&snispoofing={spoof_q}"
     return f"vless://{config_uuid}@{host}:{port}?{params}#{remark}"
-
-
-def generate_telegram_proxy_link(user: dict, inbound: dict) -> str:
-    """Generate a Telegram proxy link (t.me/proxy) for a user.
-
-    Format: https://t.me/proxy?server=external_domain&port=external_port&secret=secret_key
-    The secret key is the user's config_uuid.
-    """
-    config_uuid = user.get("config_uuid", "")
-    ext_domain = str(inbound.get("external_domain") or "").strip()
-    ext_port = str(inbound.get("external_port") or "").strip()
-    if not ext_domain or not ext_port or not config_uuid:
-        return ""
-    return f"https://t.me/proxy?server={ext_domain}&port={ext_port}&secret={config_uuid}"
-
-
-def _build_telegram_proxy_links(user: dict) -> list:
-    """Build telegram proxy links for all telegram-proxy inbounds of a user."""
-    links = []
-    inbound_ids = user.get("inbound_ids") or []
-    for iid in inbound_ids:
-        ib = INBOUNDS.get(iid)
-        if not ib:
-            continue
-        proto = (ib.get("protocol") or "").lower()
-        if proto == "telegram-proxy":
-            link = generate_telegram_proxy_link(user, ib)
-            if link:
-                links.append({"inbound_name": ib.get("name", ""), "link": link})
-    return links
-
-
-def generate_amneziawg_config(user: dict, inbound: dict) -> str:
-    """Generate an AmneziaWG (WARP-based) config for a user.
-
-    The config uses Cloudflare WARP keys (public key is always the WARP one).
-    The private key, address, and I1-I5 values come from the inbound settings
-    or are auto-generated per user.
-    """
-    import hashlib as _hl
-
-    config_uuid = user.get("config_uuid", "")
-    rs = inbound.get("wireguard_settings") or {}
-
-    # WARP public key (standard Cloudflare WARP)
-    warp_pubkey = rs.get("public_key") or "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
-
-    # Endpoint
-    endpoint = rs.get("endpoint") or "8.6.112.4:4233"
-
-    # MTU
-    mtu = rs.get("mtu") or "1280"
-
-    # Junk packet config (preset)
-    jc = rs.get("jc") or "3"
-    jmin = rs.get("jmin") or "1"
-    jmax = rs.get("jmax") or "3"
-
-    # Init padding (S1, S2)
-    s1 = rs.get("s1") or "0"
-    s2 = rs.get("s2") or "0"
-
-    # Header fields (H1-H4)
-    h1 = rs.get("h1") or "1"
-    h2 = rs.get("h2") or "2"
-    h3 = rs.get("h3") or "3"
-    h4 = rs.get("h4") or "4"
-
-    # AmneziaWG V1.5 params (I1-I5) - auto-generate from user UUID if not set
-    # These are obfuscation parameters
-    i1 = rs.get("i1") or ""
-    i2 = rs.get("i2") or ""
-    i3 = rs.get("i3") or ""
-    i4 = rs.get("i4") or ""
-    i5 = rs.get("i5") or ""
-
-    # Generate private key deterministically from user UUID
-    privkey = rs.get("private_key") or ""
-    if not privkey and config_uuid:
-        # Generate a deterministic WARP-like private key from the UUID
-        h = _hl.sha256(f"warp-{config_uuid}".encode()).digest()
-        import base64 as _b64
-        # WireGuard private key is 32 bytes base64
-        privkey = _b64.b64encode(h).decode()
-
-    # Generate address from user index
-    user_hash = int(config_uuid.replace("-", "")[:8], 16) if config_uuid else 1
-    ipv4_suffix = user_hash % 65535 + 1
-    # WARP IPv6 prefix
-    ipv6_suffix = f"{user_hash:04x}:{(user_hash >> 16) & 0xffff:04x}"
-
-    # DNS
-    dns = rs.get("dns") or "1.1.1.1, 1.0.0.1, 2606:4700:4700::1111, 2606:4700:4700::1001"
-
-    config = f"""# Generated AmneziaWG Config
-[Interface]
-PrivateKey = {privkey}
-Address = 172.16.0.{ipv4_suffix % 254 + 1}/32, 2606:4700:110:{ipv6_suffix}:d0f9:a36b:d132/128
-DNS = {dns}
-MTU = {mtu}
-Jc = {jc}
-Jmin = {jmin}
-Jmax = {jmax}
-S1 = {s1}
-S2 = {s2}
-H1 = {h1}
-H2 = {h2}
-H3 = {h3}
-H4 = {h4}
-I1 = {i1}
-I2 = {i2}
-I3 = {i3}
-I4 = {i4}
-I5 = {i5}
-
-[Peer]
-PublicKey = {warp_pubkey}
-AllowedIPs = 0.0.0.0/0, ::/0
-Endpoint = {endpoint}"""
-
-    return config
 
 
 def generate_custom_ip_configs(user_id: str, user: dict) -> list:
@@ -1737,11 +1728,11 @@ async def health():
 @app.get("/sub/{identifier}/ping")
 async def sub_ping_handler(identifier: str):
     """Ping endpoint for subscription page — returns a simple response."""
-    # Check by config_uuid
+    # Check user first
     async with USERS_LOCK:
-        for uid, u in USERS.items():
-            if u.get("config_uuid") == identifier:
-                return {"ok": True, "ping": "pong", "uuid": identifier}
+        for u in USERS.values():
+            if u.get("username") == identifier and u.get("status") == "active":
+                return {"ok": True, "ping": "pong", "username": identifier}
     # Fallback: check if it's a link
     async with LINKS_LOCK:
         link = LINKS.get(identifier)
@@ -1753,33 +1744,30 @@ async def sub_ping_handler(identifier: str):
 # ── Subscription (single link / user sub page) ──────────────────────────────
 @app.get("/sub/{identifier}")
 async def subscription_handler(identifier: str, request: Request):
-    """Smart handler: serves sub page by config_uuid, then falls back to links.
-    When a client (v2rayNG, V2Box, etc.) imports this URL, it gets ALL configs
-    as base64-encoded newline-separated configs."""
+    """Smart handler: accepts UUID (config_uuid) → returns all user configs as base64.
+    Also accepts username → serves the HTML subscription page for admin preview."""
     import base64
 
-    # 1) Check if it's a user config_uuid
-    user = None
-    uid = None
-    async with USERS_LOCK:
-        for u_id, u in USERS.items():
-            if u.get("config_uuid") == identifier:
-                user = dict(u)
-                uid = u_id
-                break
+    # 1) UUID format → subscription for V2Box/clients: return ALL configs for the user
+    if _is_valid_uuid(identifier):
+        async with USERS_LOCK:
+            target_user = None
+            target_uid = None
+            for uid, u in USERS.items():
+                if u.get("config_uuid") == identifier:
+                    target_user = u
+                    target_uid = uid
+                    break
+        if target_user:
+            host = SETTINGS.get("domain") or get_host()
+            username = target_user.get("username", target_uid)
 
-    if user:
-        # Check Accept header — if client wants text/plain, serve configs for import
-        accept = request.headers.get("accept", "")
-        is_client_import = "text/plain" in accept or "subscription" in accept.lower()
-
-        if is_client_import:
-            # Build ALL configs for this user (same as API sub endpoint)
-            inbound_ids = user.get("inbound_ids") or []
+            # Build ALL configs for this user (same logic as /api/sub/)
             configs = []
-            stored_path_user = (user.get("path") or "").strip()
-            for iid in inbound_ids:
-                ib = INBOUNDS.get(iid)
+            inbound_ids = target_user.get("inbound_ids") or []
+            stored_path_user = (target_user.get("path") or "").strip()
+            for iid_ in inbound_ids:
+                ib = INBOUNDS.get(iid_)
                 try:
                     _p = (ib.get("protocol") if ib else "").lower()
                     _s = (ib.get("security") if ib else "").lower()
@@ -1787,52 +1775,57 @@ async def subscription_handler(identifier: str, request: Request):
                         if not str(ib.get("external_domain") or "").strip() or not str(ib.get("external_port") or "").strip():
                             continue
                     if ib and _p == "worker":
-                        configs.extend(_worker_configs(uid, user, ib, stored_path_user, f"Spider-{user.get('username', uid)}"))
-                    elif ib and _p == "wireguard":
-                        wg_cfg = generate_amneziawg_config(user, ib)
-                        if wg_cfg:
-                            configs.append(wg_cfg)
+                        configs.extend(_worker_configs(target_uid, target_user, ib, stored_path_user, f"Spider-{username}"))
                     else:
-                        cfg = generate_user_config(uid, user, iid)
+                        cfg = generate_user_config(target_uid, target_user, iid_)
                         if cfg:
                             configs.append(cfg)
                 except Exception:
                     continue
             if not configs:
-                fallback_config = generate_user_config(uid, user, user.get("inbound_id"))
-                if fallback_config:
-                    configs = [fallback_config]
+                fallback_config = generate_user_config(target_uid, target_user, target_user.get("inbound_id"))
+                configs = [fallback_config] if fallback_config else []
 
-            # Custom IPs
-            custom_cfgs = generate_custom_ip_configs(uid, user)
-            for cfg_list in custom_cfgs.values():
-                configs.extend(cfg_list)
+            # Custom scanned-IP configs
+            custom_cfgs = generate_custom_ip_configs(target_uid, target_user)
+            for cfg in custom_cfgs.get("railway", []) + custom_cfgs.get("cf", []):
+                configs.append(cfg)
 
-            # Telegram proxy links
-            for link_data in _build_telegram_proxy_links(user):
-                tg_link = link_data.get("link", "")
-                if tg_link:
-                    configs.append(tg_link)
+            # Sni Spoof configs
+            if target_user.get("sni_spoof_v2box"):
+                configs.extend(generate_sni_spoof_configs(target_uid, target_user))
 
-            content = base64.b64encode("\n".join(configs).encode()).decode()
-            username = user.get("username", "user")
+            if not configs:
+                raise HTTPException(status_code=404, detail="no configs found")
+
+            # Status config as first entry
+            status_config = generate_status_config(target_user, configs)
+            all_configs = [status_config] + configs if status_config else configs
+
+            content = base64.b64encode("\n".join(all_configs).encode()).decode()
             return Response(content=content, media_type="text/plain",
-                            headers={"profile-title": quote(username), "support-url": "https://t.me/spider_vpn1",
-                                      "content-disposition": f'attachment; filename="{username}"'})
-        else:
-            # Browser request — serve the HTML sub page
-            return FileResponse(_os.path.join(_STATIC_DIR, "sub.html"))
+                            headers={"profile-title": quote(username),
+                                      "profile-update-interval": "12",
+                                      "support-url": "https://t.me/spider_vpn1"})
 
-    # 2) Check if it's a link UUID (return base64 config)
-    async with LINKS_LOCK:
-        link = LINKS.get(identifier)
-    if link and is_link_allowed(link):
-        host = SETTINGS.get("domain") or get_host()
-        proto = link.get("protocol", DEFAULT_PROTOCOL)
-        vless = generate_vless_link(identifier, host, remark=f"Spider-{link['label']}", protocol=proto)
-        content = base64.b64encode(vless.encode()).decode()
-        return Response(content=content, media_type="text/plain",
-                        headers={"profile-title": quote(link["label"]), "support-url": "https://t.me/spider_vpn1"})
+        # Fallback: check LINKS (legacy link UUID)
+        async with LINKS_LOCK:
+            link = LINKS.get(identifier)
+        if link and is_link_allowed(link):
+            host = SETTINGS.get("domain") or get_host()
+            proto = link.get("protocol", DEFAULT_PROTOCOL)
+            vless = generate_vless_link(identifier, host, remark=f"Spider-{link['label']}", protocol=proto)
+            content = base64.b64encode(vless.encode()).decode()
+            return Response(content=content, media_type="text/plain",
+                            headers={"profile-title": quote(link["label"]), "support-url": "https://t.me/spider_vpn1"})
+
+        raise HTTPException(status_code=404, detail="not found")
+
+    # 2) Username format → serve the HTML subscription page (admin preview)
+    async with USERS_LOCK:
+        for uid, u in USERS.items():
+            if u.get("username") == identifier:
+                return FileResponse(_os.path.join(_STATIC_DIR, "sub.html"))
 
     raise HTTPException(status_code=404, detail="not found")
 
@@ -2377,7 +2370,7 @@ async def create_inbound(request: Request, _=Depends(require_auth)):
     body = await request.json()
     name = (body.get("name") or "اینباند جدید").strip()[:60]
     protocol = str(body.get("protocol") or "vless").lower()
-    if protocol not in ("vless", "vmess", "trojan", "reality", "worker", "wireguard"):
+    if protocol not in ("vless", "vmess", "trojan", "reality", "worker", "wireguard", "telegram"):
         raise HTTPException(status_code=400, detail="Invalid protocol")
     network = str(body.get("network") or "ws").lower()
     security = str(body.get("security") or "tls").lower()
@@ -2407,6 +2400,8 @@ async def create_inbound(request: Request, _=Depends(require_auth)):
     xhttp_settings = body.get("xhttp_settings", {}) if isinstance(body.get("xhttp_settings"), dict) else {}
     ws_settings = body.get("ws_settings", {}) if isinstance(body.get("ws_settings"), dict) else {}
     grpc_settings = body.get("grpc_settings", {}) if isinstance(body.get("grpc_settings"), dict) else {}
+    wireguard_settings = body.get("wireguard_settings", {}) if isinstance(body.get("wireguard_settings"), dict) else {}
+    telegram_settings = body.get("telegram_settings", {}) if isinstance(body.get("telegram_settings"), dict) else {}
 
     # Auto-generate Reality keys (x25519 pbk/priv + short_id + mldsa65 seed)
     # fresh for every reality inbound. SNI target is fixed.
@@ -2436,15 +2431,6 @@ async def create_inbound(request: Request, _=Depends(require_auth)):
         external_domain = ""
         external_port = ""
 
-    # WireGuard settings
-    wireguard_settings = body.get("wireguard_settings", {}) if isinstance(body.get("wireguard_settings"), dict) else {}
-    if protocol == "wireguard" or security == "wireguard":
-        protocol = "wireguard"
-        network = "udp"
-        security = "wireguard"
-        if not wireguard_settings.get("endpoint"):
-            raise HTTPException(status_code=400, detail="Endpoint is required for WireGuard inbound")
-
     inbound_id = generate_short_id()
     async with INBOUNDS_LOCK:
         if any(ib.get("name") == name for ib in INBOUNDS.values()):
@@ -2462,10 +2448,11 @@ async def create_inbound(request: Request, _=Depends(require_auth)):
             "external_port": external_port,
             "fingerprint": fingerprint,
             "reality_settings": reality_settings,
-            "wireguard_settings": wireguard_settings,
             "xhttp_settings": xhttp_settings,
             "ws_settings": ws_settings,
             "grpc_settings": grpc_settings,
+            "wireguard_settings": wireguard_settings,
+            "telegram_settings": telegram_settings,
             "created_at": datetime.now().isoformat(),
         }
     if protocol == "reality" and network == "xhttp" and not xhttp_settings.get("path"):
@@ -2491,7 +2478,7 @@ async def update_inbound(inbound_id: str, request: Request, _=Depends(require_au
             ib["name"] = str(body["name"]).strip()[:60]
         if "protocol" in body:
             p = str(body["protocol"]).lower()
-            if p in ("vless", "vmess", "trojan", "reality", "worker", "wireguard"):
+            if p in ("vless", "vmess", "trojan", "reality", "worker", "wireguard", "telegram"):
                 ib["protocol"] = p
         # A worker inbound always targets the connected worker domain; if the
         # inbound's domain is stale/empty, refresh it automatically.
@@ -2551,15 +2538,19 @@ async def update_inbound(inbound_id: str, request: Request, _=Depends(require_au
             ib["grpc_settings"] = body["grpc_settings"]
         if "wireguard_settings" in body and isinstance(body["wireguard_settings"], dict):
             ib["wireguard_settings"] = body["wireguard_settings"]
-        # WireGuard inbound auto-set
-        if ib.get("protocol") == "wireguard" or ib.get("security") == "wireguard":
-            ib["protocol"] = "wireguard"
-            ib["network"] = "udp"
-            ib["security"] = "wireguard"
+        if "telegram_settings" in body and isinstance(body["telegram_settings"], dict):
+            ib["telegram_settings"] = body["telegram_settings"]
     await save_state()
     log_activity("inbound", f"اینباند «{ib.get('name', inbound_id)}» ویرایش شد", "info")
     asyncio.create_task(_xray_apply())
     return {"ok": True}
+
+
+@app.get("/api/wg/endpoints")
+async def list_wg_endpoints(_=Depends(require_auth)):
+    """Return available WireGuard endpoints from endpoint.txt."""
+    endpoints = _wg_read_endpoints()
+    return {"endpoints": endpoints}
 
 
 @app.post("/api/inbounds/{inbound_id}/generate-reality-keys")
@@ -2678,7 +2669,8 @@ async def create_user(request: Request, _=Depends(require_auth)):
     traffic_limit_gb = float(body.get("traffic_limit_gb") or 0)
     expire_days = int(body.get("expire_days") or 0)
     protocol = str(body.get("protocol") or "vless").lower()
-    concurrent_connections = int(body.get("concurrent_connections") or 3)
+    _cc_raw = body.get("concurrent_connections")
+    concurrent_connections = int(_cc_raw) if _cc_raw is not None else 3
     server = (body.get("server") or "IR-Tehran-01").strip()[:40]
     sni = str(body.get("sni") or "").strip()
     path_custom = str(body.get("path") or "").strip()
@@ -2748,8 +2740,8 @@ async def create_user(request: Request, _=Depends(require_auth)):
         raise HTTPException(status_code=400, detail="Username is required")
     if len(password) < 4:
         raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
-    if concurrent_connections < 1:
-        concurrent_connections = 1
+    if concurrent_connections < 0:
+        concurrent_connections = 0
 
     user_id = generate_short_id()
     config_uuid = generate_uuid()
@@ -2973,7 +2965,7 @@ async def edit_user(user_id: str, request: Request, _=Depends(require_auth)):
         if "transport_type" in body:
             u["transport_type"] = str(body["transport_type"]).strip().lower()
         if "concurrent_connections" in body:
-            u["concurrent_connections"] = max(1, int(body["concurrent_connections"]))
+            u["concurrent_connections"] = max(0, int(body["concurrent_connections"]))
         if "reset_traffic" in body and body["reset_traffic"]:
             u["traffic_used_bytes"] = 0
         if "custom_ip_type" in body:
@@ -3120,8 +3112,9 @@ async def edit_user(user_id: str, request: Request, _=Depends(require_auth)):
                 u["status"] = st
 
         if "concurrent_connections" in body:
-            cc = int(body["concurrent_connections"] or 3)
-            u["concurrent_connections"] = max(1, cc)
+            _ccv = body["concurrent_connections"]
+            cc = int(_ccv) if _ccv is not None else 3
+            u["concurrent_connections"] = max(0, cc)
 
     asyncio.create_task(save_state())
     log_activity("user", f"کاربر «{old_username}» ویرایش شد", "info")
@@ -3150,7 +3143,7 @@ async def get_user_config(user_id: str, _=Depends(require_auth)):
 
 @app.get("/api/users/{user_id}/qr")
 async def get_user_qr(user_id: str, _=Depends(require_auth)):
-    """Return a QR code PNG image for the user's config."""
+    """Return a QR code PNG for the user's subscription URL (domain/sub/uuid)."""
     if not QR_AVAILABLE:
         raise HTTPException(status_code=501, detail="QR code generation not available (install qrcode and Pillow)")
 
@@ -3158,18 +3151,24 @@ async def get_user_qr(user_id: str, _=Depends(require_auth)):
         u = USERS.get(user_id)
         if not u:
             raise HTTPException(status_code=404, detail="user not found")
-        config = generate_user_config(user_id, u, u.get("inbound_id"))
+        config_uuid = u.get("config_uuid", "")
+        username = u.get("username", user_id)
 
-    # Generate QR code
+    if not config_uuid:
+        raise HTTPException(status_code=404, detail="user has no config_uuid")
+
+    host = SETTINGS.get("domain") or get_host()
+    sub_url = f"https://{host}/sub/{config_uuid}"
+
     qr = qrcode.QRCode(version=1, box_size=10, border=4, error_correction=qrcode.constants.ERROR_CORRECT_M)
-    qr.add_data(config)
+    qr.add_data(sub_url)
     qr.make(fit=True)
     img = qr.make_image(fill_color="black", back_color="white")
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
     return Response(content=buf.getvalue(), media_type="image/png",
-                    headers={"Content-Disposition": f"inline; filename={user_id}.png"})
+                    headers={"Content-Disposition": f"inline; filename={username}.png"})
 
 @app.get("/api/users/{user_id}/subscription")
 async def get_user_subscription(user_id: str, _=Depends(require_auth)):
@@ -3365,10 +3364,6 @@ async def api_user_sub(username: str):
                         continue
                 if ib and _p == "worker":
                     configs.extend(_worker_configs(uid_, user, ib, stored_path_user, f"Spider-{user.get('username', uid_)}"))
-                elif ib and _p == "wireguard":
-                    wg_cfg = generate_amneziawg_config(user, ib)
-                    if wg_cfg:
-                        configs.append(wg_cfg)
                 else:
                     configs.append(generate_user_config(uid_, user, iid_))
             except Exception:
@@ -3421,6 +3416,7 @@ async def api_user_sub(username: str):
 
     return {
         "username": user.get("username"),
+        "config_uuid": user.get("config_uuid", ""),
         "protocol": user.get("protocol", "vless"),
         "custom_ip_type": user.get("custom_ip_type", ""),
         "custom_ip_count": len(all_custom),
@@ -3456,13 +3452,13 @@ async def api_user_sub(username: str):
         "proxy_ip_enabled": user.get("proxy_ip_enabled", False),
         "max_ip_per_user": int(user.get("concurrent_connections", SETTINGS.get("max_ip_per_user", 3) or 3)),
         "used_ips": len(USER_IP_MAP.get(user.get("user_id", ""), set())),
-        "telegram_proxy_links": _build_telegram_proxy_links(user),
     }
 
 
 @app.get("/api/sub/{username}/qr")
 async def sub_qr(username: str):
-    """Public QR code PNG for the subscription page (no auth required)."""
+    """Public QR code PNG for the subscription page (no auth required).
+    QR contains the subscription URL: domain/sub/config_uuid"""
     if not QR_AVAILABLE:
         raise HTTPException(status_code=501, detail="qr code generation not available")
     user = None
@@ -3475,10 +3471,14 @@ async def sub_qr(username: str):
                 break
     if not user:
         raise HTTPException(status_code=404, detail="user not found")
-    config = generate_user_config(uid, user, user.get("inbound_id"))
+    config_uuid = user.get("config_uuid", "")
+    if not config_uuid:
+        raise HTTPException(status_code=404, detail="user has no config_uuid")
+    host = SETTINGS.get("domain") or get_host()
+    sub_url = f"https://{host}/sub/{config_uuid}"
     qr = qrcode.QRCode(version=1, box_size=8, border=3,
                        error_correction=qrcode.constants.ERROR_CORRECT_M)
-    qr.add_data(config)
+    qr.add_data(sub_url)
     qr.make(fit=True)
     img = qr.make_image(fill_color="black", back_color="white")
     buf = io.BytesIO()
@@ -3619,6 +3619,7 @@ async def set_global_settings(request: Request, _=Depends(require_auth)):
     asyncio.create_task(save_state())
     log_activity("settings", "تنظیمات کلی ذخیره شد", "ok")
     return {"ok": True}
+
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -4490,10 +4491,12 @@ async def _link_max_ip(uuid: str) -> int:
         async with USERS_LOCK:
             u = USERS.get(user_id)
         if u:
-            return int(u.get("concurrent_connections", 3) or 3)
+            _cc = u.get("concurrent_connections")
+            return int(_cc) if _cc is not None else 3
     # No registered user → use global setting (covers raw links / group links)
     async with SETTINGS_LOCK:
-        return int(SETTINGS.get("max_ip_per_user", 3) or 3)
+        _mip = SETTINGS.get("max_ip_per_user")
+        return int(_mip) if _mip is not None else 3
 
 async def enforce_ip_limit_for_link(uuid: str, ip: str) -> bool:
     """Real per-user concurrent-IP limit enforcement.
@@ -5850,15 +5853,17 @@ async def worker_get(_=Depends(require_auth)):
 
 @app.post("/api/worker/setup")
 async def worker_setup(request: Request, _=Depends(require_auth)):
-    """Connect to Cloudflare: verify token + auto-discover account_id and worker
-    domain, deploy the worker script and store the connection. Only requires the API token."""
+    """Connect to Cloudflare: verify token + auto-detect account, auto-discover
+    the worker name and domain, deploy the worker script and store the connection.
+    Account ID is auto-detected from the token — no manual entry needed."""
     body = await request.json()
     token = str(body.get("token") or "").strip()
+    account_id = str(body.get("account_id") or "").strip()
     email = os.environ.get("CF_EMAIL", "")
     if not token:
         raise HTTPException(status_code=400, detail="token is required")
 
-    # 1. Verify the API token
+    # 1. Verify the API token.
     _is_gak = _is_cf_gak(token)
     verify_path = "/user/tokens/verify" if not _is_gak else "/user"
     code, data = await _cf_api("GET", verify_path, token, email=email)
@@ -5866,18 +5871,17 @@ async def worker_setup(request: Request, _=Depends(require_auth)):
         msg = (data.get("errors") or [{}])[0].get("message", "invalid token")
         raise HTTPException(status_code=400, detail=f"Cloudflare token rejected: {msg}")
 
-    # 2. Auto-discover account_id from the token
-    code, data = await _cf_api("GET", "/accounts", token, email=email)
-    if code != 200 or not data.get("result"):
-        raise HTTPException(status_code=400, detail="could not list Cloudflare accounts — check token permissions")
-    accounts = data["result"]
-    if not accounts:
-        raise HTTPException(status_code=400, detail="no Cloudflare accounts found for this token")
-    account_id = accounts[0].get("id", "")
+    # 2. Auto-detect account_id if not provided (list accounts and pick the first one).
     if not account_id:
-        raise HTTPException(status_code=400, detail="could not determine account_id")
+        code_acc, data_acc = await _cf_api("GET", "/accounts", token, email=email)
+        if code_acc == 200 and data_acc.get("result"):
+            accounts = data_acc["result"]
+            if isinstance(accounts, list) and len(accounts) > 0:
+                account_id = accounts[0].get("id", "")
+        if not account_id:
+            raise HTTPException(status_code=400, detail="Could not auto-detect Cloudflare Account ID. Make sure your token has account read permission.")
 
-    # 3. Discover the worker name + subdomain from the account
+    # 3. Discover the worker name + subdomain from the account.
     worker_name = str(body.get("worker_name") or "spider-proxy").strip()
     worker_domain = ""
     code, data = await _cf_api("GET", f"/accounts/{account_id}/workers/subdomain", token, email=email)
@@ -5885,6 +5889,11 @@ async def worker_setup(request: Request, _=Depends(require_auth)):
         subdom = str(data["result"].get("subdomain") or "").strip()
         if subdom:
             worker_domain = _worker_safe_domain(f"{worker_name}.{subdom}.workers.dev")
+    if not worker_domain:
+        # Fallback: try to read the existing script's domain (if it was deployed before).
+        code2, data2 = await _cf_api("GET", f"/accounts/{account_id}/workers/scripts/{worker_name}", token, email=email)
+        if code2 in (200, 404):
+            pass  # script check only; domain comes from subdomain above
     if not worker_domain:
         no_subdomain = any(e.get("code") == 10007 for e in (data.get("errors") or []))
         if no_subdomain:
@@ -5896,7 +5905,7 @@ async def worker_setup(request: Request, _=Depends(require_auth)):
             )
         raise HTTPException(status_code=400, detail="could not resolve worker subdomain — check the API token has Workers:Edit permission")
 
-    # 4. Save connection, then deploy the worker script.
+    # 3. Save connection, then deploy the worker script.
     async with WORKER_LOCK:
         WORKER.update({
             "connected": True,
@@ -6038,13 +6047,6 @@ async def worker_del_proxy(code: str, _=Depends(require_auth)):
         return {"ok": True, **_worker_public()}
 
 
-@app.get("/api/wireguard/endpoints")
-async def wireguard_endpoints(_=Depends(require_auth)):
-    """Return the list of WireGuard endpoints from endpoints.txt."""
-    endpoints = _load_endpoints()
-    return {"ok": True, "endpoints": endpoints}
-
-
 @app.get("/api/worker/locations")
 async def worker_locations(_=Depends(require_auth)):
     """Location status list for the Map tab. Prefers live data from the worker."""
@@ -6095,6 +6097,32 @@ async def scanner_get_ips(ctype: str, _=Depends(require_auth)):
     if ctype not in _SCANNED_TYPES:
         raise HTTPException(status_code=400, detail="invalid scanner source")
     return {"ok": True, "type": ctype, "ips": _read_scanned_ips(ctype), "seq": SCANNED_SEQ.get(ctype, 0)}
+
+
+@app.get("/api/scanner/cf-subnets")
+async def scanner_cf_subnets(_=Depends(require_auth)):
+    """Return Cloudflare subnets from cf_subnets.txt for IP range generation."""
+    subnets_file = Path(os.path.dirname(os.path.abspath(__file__))) / "data" / "cf_subnets.txt"
+    if not subnets_file.is_file():
+        subnets_file = DATA_DIR / "cf_subnets.txt"
+    if not subnets_file.is_file():
+        return {"subnets": []}
+    lines = subnets_file.read_text(errors="ignore").splitlines()
+    subnets = [l.strip() for l in lines if l.strip() and not l.strip().startswith("#")]
+    return {"subnets": subnets}
+
+
+@app.get("/api/scanner/sni-list")
+async def scanner_sni_list(_=Depends(require_auth)):
+    """Return SNI list from sni-list.txt for spoof scanning."""
+    sni_file = Path(os.path.dirname(os.path.abspath(__file__))) / "data" / "sni-list.txt"
+    if not sni_file.is_file():
+        sni_file = DATA_DIR / "sni-list.txt"
+    if not sni_file.is_file():
+        return {"sni_list": []}
+    lines = sni_file.read_text(errors="ignore").splitlines()
+    snis = [l.strip() for l in lines if l.strip() and not l.strip().startswith("#")]
+    return {"sni_list": snis}
 
 
 @app.post("/api/scanner/save")
@@ -6198,8 +6226,6 @@ async def scanner_ping_batch(request: Request, _=Depends(require_auth)):
 
     results = await asyncio.gather(*(probe(t) for t in targets))
     results.sort(key=lambda r: (not r["ok"], r["latency_ms"] if r["latency_ms"] is not None else 10 ** 9))
-    # Small delay between batches to avoid being flagged as spam
-    await asyncio.sleep(0.5)
     return {"ok": True, "count": len(results), "results": results}
 
 
