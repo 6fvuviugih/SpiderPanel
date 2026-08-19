@@ -542,28 +542,7 @@ input,select,button,textarea{font-family:inherit}
 .topbar-r{display:flex;gap:8px;align-items:center}
 .lang-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;background:var(--bg3);border:1px solid var(--border);color:var(--txt);font-size:12px;font-weight:700;cursor:pointer;transition:all .2s}
 .lang-btn:hover{border-color:var(--border-glow);color:var(--neon)}
-.content{min-width:0;padding:20px 24px;flex:1;overflow-x:hidden;overflow-y:auto;position:relative;z-index:1;display:flex;flex-direction:column;min-height:0;}
-.tab-content{flex:1;display:flex;flex-direction:column;min-height:0;}
-.tab-content.hidden{display:none!important}
-.tab-content:not(.hidden){display:flex;flex-direction:column;position:static!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;transform:none!important;width:100%;margin-top:0!important;align-self:stretch;}
-/* Settings / Contact / Worker must always start at the top of the content area. */
-#tab-worker,#tab-settings,#tab-contact{
-  position:static!important;top:0!important;right:auto!important;bottom:auto!important;left:auto!important;
-  transform:none!important;display:block!important;width:100%!important;margin:0!important;padding:0!important;
-  align-self:flex-start!important;flex:none!important;min-height:0!important;height:auto!important;
-  max-height:none!important;overflow:visible!important;contain:none!important;
-  justify-content:flex-start!important;align-items:stretch!important;
-  scroll-margin-top:0!important;overflow-anchor:none!important;
-}
-#tab-worker.hidden,#tab-settings.hidden,#tab-contact.hidden{display:none!important;}
-#tab-worker>.panel,#tab-settings>.panel,#tab-contact>.panel{
-  display:block!important;box-sizing:border-box!important;float:none!important;position:static!important;
-  top:auto!important;bottom:auto!important;transform:none!important;
-  margin:0 0 14px 0!important;max-height:none!important;overflow:visible!important;
-}
-#tab-worker .panel:first-child,#tab-contact .panel:first-child{margin-top:0!important;}
-#tab-contact .contact-panel{height:auto!important;min-height:0!important;max-height:none!important;}
-.content{justify-content:flex-start!important;align-items:stretch!important;overflow-anchor:none!important;scroll-padding-top:0!important;}
+.content{min-width:0;padding:20px 24px;flex:1;overflow-x:hidden;overflow-y:auto;position:relative;z-index:1}
 
 /* LTR (English) adjustments — iOS system font */
 html[lang="en"] body, html[lang="en"] .sidebar, html[lang="en"] .panel, html[lang="en"] .btn { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, 'Segoe UI', Roboto, sans-serif; }
@@ -1223,7 +1202,6 @@ tr{animation:fadeIn .3s ease}
               </div>
             </div>
           </div>
-        </div>
 
           <!-- SNI PANE -->
           <div class="scn-pane" id="scn-pane-sni">
@@ -1978,44 +1956,16 @@ function updateGreeting() {
 function switchTab(tab, el) {
   document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
   if (el) el.classList.add('active');
-  var content = document.querySelector('.content');
   document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.add('hidden'); });
   var target = $id('tab-' + tab);
-  if (!target) return;
-
-  // Prevent the previous tab's scroll position / scroll anchoring from
-  // pushing Worker or Contact below the viewport.
-  if (content) {
-    content.style.scrollBehavior = 'auto';
-    content.scrollTop = 0;
-    content.scrollLeft = 0;
-  }
-  target.classList.remove('hidden');
-  target.style.setProperty('margin-top', '0px', 'important');
-  target.style.setProperty('top', '0px', 'important');
-  target.style.setProperty('transform', 'none', 'important');
-  if (tab === 'worker' || tab === 'contact' || tab === 'settings') {
-    target.style.setProperty('position', 'static', 'important');
-    target.style.setProperty('display', 'block', 'important');
-    target.style.setProperty('flex', 'none', 'important');
-  }
-
-  // Two layout passes are intentional: one immediately after display and
-  // one after the browser has painted the new tab.
-  var resetScroll = function() {
-    if (content) { content.scrollTop = 0; content.scrollLeft = 0; }
-    target.scrollTop = 0; target.scrollLeft = 0;
-    document.documentElement.scrollTop = 0; document.body.scrollTop = 0;
-  };
-  resetScroll();
-  requestAnimationFrame(resetScroll);
-
+  if (target) target.classList.remove('hidden');
   stopLiveStats();
   if (tab === 'dashboard') loadDashboard();
   if (tab === 'users') loadUsers();
   if (tab === 'inbounds') loadInbounds();
   if (tab === 'scanner') scnInit();
   if (tab === 'worker') loadWorker();
+  // Close sidebar on mobile
   closeSidebar();
 }
 
