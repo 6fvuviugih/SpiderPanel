@@ -1470,8 +1470,6 @@ tr{animation:fadeIn .3s ease}
         <div class="f-g"><label>Public Key</label><input type="text" id="ib-pubkey" dir="ltr" data-i18n-placeholder="autoGen" placeholder="تولید خودکار" readonly></div>
       </div>
       <button type="button" class="btn btn-sm btn-b" onclick="generateRealityKeysUI()" style="width:100%;margin-bottom:10px"><span data-i18n="genRealityKey">تولید کلید Reality (x25519)</span></button>
-      <div class="f-g"><label data-i18n="dest">Destination</label><input type="text" id="ib-dest" value="is1-ssl.mzstatic.com:443" dir="ltr"></div>
-      <div class="f-g"><label data-i18n="serverNames">Server Names (SNI)</label><input type="text" id="ib-servernames" value="is1-ssl.mzstatic.com" dir="ltr" data-i18n-placeholder="commaSep" placeholder="با کاما جدا کنید"></div>
       <div class="f-g"><label data-i18n="shortIds">Short IDs</label><div style="display:flex;gap:6px"><input type="text" id="ib-shortids" value="" dir="ltr" data-i18n-placeholder="hex8" placeholder="هگز ۸ رقمی — خالی = تصادفی" style="flex:1"><button type="button" class="btn btn-sm" onclick="generateShortId()" style="white-space:nowrap"><span data-i18n="generate">+ تولید</span></button></div></div>
       <div class="f-g"><label data-i18n="spiderx">SpiderX</label><input type="text" id="ib-spiderx" dir="ltr" placeholder="/" value="/"></div>
     </div>
@@ -1527,22 +1525,6 @@ tr{animation:fadeIn .3s ease}
         <div class="f-g"><label>External Port</label><input type="number" id="ib-tg-extport" value="443" dir="ltr" placeholder="443"></div>
       </div>
       <div class="f-g"><label>External Domain</label><input type="text" id="ib-tg-domain" dir="ltr" placeholder="proxy.example.com"></div>
-      <div class="f-r">
-        <div class="f-g"><label>SNI</label><input type="text" id="ib-tg-sni" dir="ltr" placeholder="www.google.com"></div>
-        <div class="f-g"><label>Destination</label><input type="text" id="ib-tg-dest" dir="ltr" placeholder="149.154.167.50:443"></div>
-      </div>
-      <div class="f-g"><label>Server Name</label><input type="text" id="ib-tg-servername" dir="ltr" placeholder="Optional server name"></div>
-    </div>
-
-    <!-- Common fields for all inbound types: SNI / Destination / Server Name -->
-    <div id="ib-common-fields" class="hidden">
-      <div class="divider"></div>
-      <div style="font-size:11px;color:var(--neon);font-weight:700;margin-bottom:8px">Advanced Settings</div>
-      <div class="f-r">
-        <div class="f-g"><label>SNI</label><input type="text" id="ib-common-sni" dir="ltr" placeholder="Override SNI for this inbound"></div>
-        <div class="f-g"><label>Destination</label><input type="text" id="ib-common-dest" dir="ltr" placeholder="Custom destination host:port"></div>
-      </div>
-      <div class="f-g"><label>Server Name</label><input type="text" id="ib-common-servername" dir="ltr" placeholder="Server name for SNI spoofing"></div>
     </div>
 
     <!-- Network group -->
@@ -2430,13 +2412,10 @@ function selectedInboundIds() {
 function onSecurityChange() {
   var sec = $id('ib-security').value;
   toggleById('ib-reality-fields', sec === 'reality');
-  // Common fields (Destination/ServerName) ONLY for Reality
-  toggleById('ib-common-fields', sec === 'reality');
 }
 
 function onProtocolChange() {
   var proto = $id('ib-protocol').value;
-  var sec = $id('ib-security').value;
   var isWg = proto === 'wireguard';
   var isTg = proto === 'telegram';
   var isTls = !isWg && !isTg;
@@ -2444,8 +2423,6 @@ function onProtocolChange() {
   toggleById('ib-net-wrap', isTls);
   toggleById('ib-wg-fields', isWg);
   toggleById('ib-tg-fields', isTg);
-  // Common fields (Destination/ServerName) ONLY for Reality security
-  toggleById('ib-common-fields', sec === 'reality');
   if (isWg) loadWGEndpoints();
 }
 
@@ -2526,8 +2503,6 @@ function openCreateInbound() {
   $id('ib-pubkey').value = '';
   $id('ib-shortids').value = '';
   $id('ib-spiderx').value = '/';
-  $id('ib-dest').value = 'is1-ssl.mzstatic.com:443';
-  $id('ib-servernames').value = 'is1-ssl.mzstatic.com';
   $id('ib-wspath').value = '/';
   $id('ib-xhttppath').value = '/';
   $id('ib-xhttp-mode').value = 'auto';
@@ -2555,8 +2530,6 @@ function editInbound(iid) {
   $id('ib-pubkey').value = (rs || {}).public_key || '';
   $id('ib-shortids').value = (rs || {}).short_id || '';
   $id('ib-spiderx').value = (rs || {}).spiderx || '/';
-  $id('ib-dest').value = (rs || {}).dest || 'is1-ssl.mzstatic.com:443';
-  $id('ib-servernames').value = (rs || {}).sni || 'is1-ssl.mzstatic.com';
   var ws = ib.ws_settings || {}; var xh = ib.xhttp_settings || {};
   $id('ib-wspath').value = ws.path || '/';
   $id('ib-xhttppath').value = xh.path || '/';
@@ -2583,27 +2556,16 @@ function editInbound(iid) {
     $id('ib-wg-h3').value = wg.h3 || '3';
     $id('ib-wg-h4').value = wg.h4 || '4';
     $id('ib-wg-i1').value = wg.i1 || '';
-    // Common fields
-    $id('ib-common-sni').value = ib.sni || '';
-    $id('ib-common-dest').value = ib.destination || '';
-    $id('ib-common-servername').value = ib.server_name || '';
     $id('ib-submit').textContent = t('updateInbound');
     onProtocolChange();
     openModal('mod-inbound');
   } else if (isTg) {
-    // Telegram Proxy: populate TG-specific fields
+    // Telegram Proxy: populate TG-specific fields (only 3 fields)
     var tg = ib.telegram_settings || {};
-    $id('ib-port').value = ib.port || 44344;
+    $id('ib-port').value = tg.internal_port || ib.port || 44344;
     $id('ib-tg-intport').value = tg.internal_port || ib.port || 44344;
     $id('ib-tg-extport').value = tg.external_port || ib.external_port || 443;
     $id('ib-tg-domain').value = tg.external_domain || ib.external_domain || '';
-    $id('ib-tg-sni').value = ib.sni || '';
-    $id('ib-tg-dest').value = ib.destination || '';
-    $id('ib-tg-servername').value = ib.server_name || '';
-    // Common fields
-    $id('ib-common-sni').value = ib.sni || '';
-    $id('ib-common-dest').value = ib.destination || '';
-    $id('ib-common-servername').value = ib.server_name || '';
     $id('ib-submit').textContent = t('updateInbound');
     onProtocolChange();
     openModal('mod-inbound');
@@ -2684,8 +2646,6 @@ async function submitInbound(e) {
       body.reality_settings = {
         private_key: $id('ib-privkey').value || '',
         public_key: $id('ib-pubkey').value || '',
-        dest: $id('ib-dest').value || 'is1-ssl.mzstatic.com:443',
-        server_names: ($id('ib-servernames').value || '').split(',').map(function(s){return s.trim()}).filter(Boolean),
         short_ids: $id('ib-shortids').value || '',
         spiderx: $id('ib-spiderx').value || '/'
       };
@@ -2700,18 +2660,6 @@ async function submitInbound(e) {
     } else if (network === 'grpc') {
       body.grpc_settings = { serviceName: $id('ib-grpc-svc').value || 'grpc' };
     }
-  }
-
-  // Common advanced fields (SNI/Destination/ServerName) for ALL inbound types
-  body.destination = $id('ib-common-dest').value || '';
-  body.server_name = $id('ib-common-servername').value || '';
-  // For Telegram, also set sni from TG-specific fields if common is empty
-  if (proto === 'telegram') {
-    body.sni = $id('ib-tg-sni').value || $id('ib-common-sni').value || '';
-    body.destination = $id('ib-tg-dest').value || body.destination;
-    body.server_name = $id('ib-tg-servername').value || body.server_name;
-  } else {
-    body.sni = $id('ib-common-sni').value || '';
   }
 
   try {
@@ -2773,6 +2721,7 @@ wireModalCloseButtons();
 
 // ─── Helpers ───
 function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function toFa(n) { return String(n).replace(/\d/g, function(d) { return '۰۱۲۳۴۵۶۷۸۹'[d]; }); }
 function fmtBytes(b) {
   if (!b || b <= 0) return '0 B';
   var u = ['B','KB','MB','GB','TB'], i = 0;
