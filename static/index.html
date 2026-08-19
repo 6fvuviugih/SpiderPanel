@@ -878,17 +878,16 @@ tr{animation:fadeIn .3s ease}
 @media(max-width:900px){.sidebar-backdrop.show{display:block}}
 .sidebar-tog{display:none}@media(max-width:900px){.sidebar-tog{display:inline-flex!important}}
 
-</style>
-<style>
-/* FINAL UI FIXES */
-.tab-content{display:block;min-height:auto;margin:0;padding:0;}
+
+/* FINAL LAYOUT FIX: tabs must start at the top of the content viewport */
+.content{display:block;align-items:initial;justify-content:initial;}
+.tab-content{display:block !important;position:relative;top:auto;transform:none;margin:0;padding:0;}
 .tab-content.hidden{display:none !important;}
-#tab-worker,#tab-contact{display:block;min-height:auto;margin:0;padding:0;}
-#tab-worker.hidden,#tab-contact.hidden{display:none !important;}
-#tab-worker>.panel,#tab-contact>.panel{margin-top:0 !important;}
-.contact-panel{margin-top:0 !important;align-self:flex-start;}
-.sb-nav{flex:0 1 auto;justify-content:flex-start;gap:5px;padding:10px;}
-.nav-item{flex-shrink:0;}
+#tab-worker,#tab-contact{min-height:0 !important;align-self:auto;margin:0;padding:0;}
+#tab-worker > .panel,#tab-contact > .panel{margin-top:0 !important;}
+
+#tab-contact .contact-panel,#tab-worker > .panel{margin-top:0 !important;}
+#tab-contact .contact-panel{padding-top:18px;}
 </style>
 </head>
 <body>
@@ -1961,6 +1960,9 @@ function switchTab(tab, el) {
   document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.add('hidden'); });
   var target = $id('tab-' + tab);
   if (target) target.classList.remove('hidden');
+  var contentEl = document.querySelector('.content');
+  if (contentEl) { contentEl.scrollTop = 0; contentEl.scrollLeft = 0; }
+  window.scrollTo(0, 0);
   stopLiveStats();
   if (tab === 'dashboard') loadDashboard();
   if (tab === 'users') loadUsers();
@@ -2532,7 +2534,6 @@ function openCreateInbound() {
   $id('ib-title').textContent = t('newInbound');
   $id('ib-name').value = '';
   $id('ib-protocol').value = 'vless';
-  $id('ib-port').value = '443';
   $id('ib-security').value = 'tls';
   $id('ib-network').value = 'ws';
   $id('ib-extdomain').value = '';
@@ -2580,7 +2581,6 @@ function editInbound(iid) {
     var wg = ib.wireguard_settings || {};
     var warpEl = $id('ib-wg-warp');
     if (warpEl) { if (wg.warp_mode) warpEl.classList.add('on'); else warpEl.classList.remove('on'); }
-    $id('ib-port').value = ib.port || 51820;
     $id('ib-wg-mtu').value = wg.mtu || '1280';
     $id('ib-wg-address').value = wg.address || '172.16.0.2/32';
     $id('ib-wg-dns').value = wg.dns || '1.1.1.1,1.0.0.1';
@@ -2601,7 +2601,6 @@ function editInbound(iid) {
   } else if (isTg) {
     // Telegram Proxy: populate TG-specific fields (only 3 fields)
     var tg = ib.telegram_settings || {};
-    $id('ib-port').value = tg.internal_port || ib.port || 44344;
     $id('ib-tg-intport').value = tg.internal_port || ib.port || 44344;
     $id('ib-tg-extport').value = tg.external_port || ib.external_port || 443;
     $id('ib-tg-domain').value = tg.external_domain || ib.external_domain || '';
@@ -2612,7 +2611,6 @@ function editInbound(iid) {
     // Reality: user fills domain + ports; pbk is auto-generated.
     $id('ib-security').value = 'reality';
     $id('ib-network').value = ib.network || 'xhttp';
-    $id('ib-port').value = ib.port || '';
     $id('ib-extdomain').value = ib.external_domain || '';
     $id('ib-extport').value = ib.external_port || '';
     $id('ib-submit').textContent = t('updateInbound');
@@ -2765,8 +2763,7 @@ document.addEventListener('keydown', function(ev) {
 document.addEventListener('DOMContentLoaded', wireModalCloseButtons);
 wireModalCloseButtons();
 
-// ─── DOM Helper ───
-// $id is defined once near the top of this script.
+// $id is defined once near the top of the script.
 
 // ─── Helpers ───
 function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
