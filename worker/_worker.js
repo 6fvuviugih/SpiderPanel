@@ -154,66 +154,133 @@ async function getCountryProxy(env, code) {
 }
 
 // ── Outbound Connection ─────────────────────────────────────────────────────
-// Uses Cloudflare's connect() Socket API to establish outbound TCP.
-// When proxyIP is provided, connects to the proxy IP on port 443 with TLS.
-// The VLESS client sends TLS ClientHello through the WS tunnel, so the
-// proxy (Cloudflare edge) accepts it via SNI-based routing.
-//
-// Connection priority:
-//   1. connect() with TLS to proxyIP:443 (best — uses edge routing)
-//   2. connect() raw TCP to proxyIP:443 (fallback — VLESS client handles TLS)
-//   3. connect() raw TCP to target host:port (last resort — direct connection)
-function getConnector(fetcher) {
-  if (typeof connect === 'function') return connect;
-  if (fetcher && typeof fetcher.connect === 'function') return fetcher.connect.bind(fetcher);
-  return null;
+function getConnector() {
+  return typeof connect === 'function' ? connect : null;
 }
-
-async function connectToProxy(proxyIP) {
-  const connector = getConnector();
-  if (!connector || !proxyIP) return null;
-
-  let host = String(proxyIP).trim();
-  let port = 443;
-  // Accept host:port without breaking bracketed IPv6 literals.
-  if (host.startsWith('[')) {
-    const close = host.indexOf(']');
-    if (close > 0) {
-      const rest = host.slice(close + 1);
-      if (rest.startsWith(':')) port = parseInt(rest.slice(1)) || 443;
-      host = host.slice(1, close);
-    }
-  } else {
-    const last = host.lastIndexOf(':');
-    if (last > -1 && host.indexOf(':') === last) {
-      port = parseInt(host.slice(last + 1)) || 443;
-      host = host.slice(0, last);
-    }
+function parseProxyEntry(entry) {
+  if (!entry) return null;
+  let e = String(entry).trim();
+  let protocol = 'http';
+  const m = e.match(/^(socks5|socks4|http|https):\/\//i);
+  if (m) { protocol = m[1].toLowerCase(); e = e.slice(m[0].length); }
+  e = e.split('#')[0].trim();
+  let username = '', password = '';
+  const at = e.lastIndexOf('@');
+  if (at >= 0) {
+    const auth = e.slice(0, at);
+    e = e.slice(at + 1);
+    const ai = auth.indexOf(':');
+    if (ai >= 0) { username = decodeURIComponent(auth.slice(0, ai)); password = decodeURIComponent(auth.slice(ai + 1)); }
+    else username = decodeURIComponent(auth);
   }
-
-  // IMPORTANT: the client already sent the VLESS payload (including the TLS
-  // ClientHello when security=tls). Do NOT start a second TLS session here.
-  // Raw TCP preserves the original TLS/SNI bytes and lets Cloudflare/edge proxy
-  // route them correctly.
-  try {
-    const sock = await connector({ hostname: host, port });
-    if (sock && sock.readable && sock.writable) {
-      return { socket: sock, reader: sock.readable.getReader(), writer: sock.writable.getWriter() };
-    }
-  } catch (e) {}
-  return null;
+  let hostname = e, port = 80;
+  if (e.startsWith('[')) {
+    const j = e.indexOf(']');
+    if (j > 0) { hostname = e.slice(1, j); if (e[j+1] === ':') port = parseInt(e.slice(j+2)) || 80; }
+  } else {
+    const j = e.lastIndexOf(':');
+    if (j > 0 && e.indexOf(':') === j) { hostname = e.slice(0, j); port = parseInt(e.slice(j+1)) || 80; }
+  }
+  if (!hostname) return null;
+  return { protocol, hostname, port, username, password };
 }
-
-async function connectDirect(host, port) {
+async function openSocket(hostname, port) {
   const connector = getConnector();
   if (!connector) return null;
   try {
-    const sock = await connector({ hostname: host, port });
-    if (sock && sock.readable && sock.writable) {
-      return { socket: sock, reader: sock.readable.getReader(), writer: sock.writable.getWriter() };
+    const sock = await connector({ hostname, port });
+    if (!sock || !sock.readable || !sock.writable) return null;
+    return { socket: sock, reader: sock.readable.getReader(), writer: sock.writable.getWriter() };
+  } catch (e) { return null; }
+}
+async function httpConnect(proxy, targetHost, targetPort) {
+  const conn = await openSocket(proxy.hostname, proxy.port);
+  if (!conn) return null;
+  try {
+    let authority = targetHost.indexOf(':') >= 0 ? `[${targetHost}]` : targetHost;
+    authority += ':' + targetPort;
+    let auth = '';
+    if (proxy.username) {
+      const raw = new TextEncoder().encode(proxy.username + ':' + (proxy.password || ''));
+      let bin = ''; for (const b of raw) bin += String.fromCharCode(b);
+      auth = 'Proxy-Authorization: Basic ' + btoa(bin) + '\r\n';
+    }
+    const req = `CONNECT ${authority} HTTP/1.1\r\nHost: ${authority}\r\n${auth}Connection: keep-alive\r\n\r\n`;
+    await conn.writer.write(new TextEncoder().encode(req));
+    let buf = new Uint8Array(0);
+    const deadline = Date.now() + 8000;
+    while (Date.now() < deadline) {
+      const r = await Promise.race([
+        conn.reader.read(),
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('proxy timeout')),2500))
+      ]);
+      if (r.done) throw new Error('proxy closed');
+      const merged = new Uint8Array(buf.length + r.value.length); merged.set(buf); merged.set(r.value,buf.length); buf=merged;
+      const txt = new TextDecoder().decode(buf);
+      const idx = txt.indexOf('\r\n\r\n');
+      if (idx >= 0) {
+        const first = txt.slice(0, idx).split('\r\n')[0];
+        if (!/HTTP\/\d\.\d\s+2\d\d/.test(first)) throw new Error('HTTP CONNECT failed: '+first);
+        return conn;
+      }
+    }
+    throw new Error('proxy header timeout');
+  } catch (e) {
+    try { conn.socket.close(); } catch (_) {}
+    return null;
+  }
+}
+async function socks5Connect(proxy, targetHost, targetPort) {
+  const conn = await openSocket(proxy.hostname, proxy.port);
+  if (!conn) return null;
+  const enc = new TextEncoder();
+  try {
+    let hello = proxy.username ? new Uint8Array([5,2,0,2]) : new Uint8Array([5,1,0]);
+    await conn.writer.write(hello);
+    const h = await conn.reader.read();
+    if (h.done || h.value.length < 2 || h.value[0] !== 5) throw new Error('bad socks5 hello');
+    let off = 0;
+    if (h.value[1] === 2) {
+      if (!proxy.username) throw new Error('socks auth required');
+      const u = enc.encode(proxy.username), pw = enc.encode(proxy.password || '');
+      const msg = new Uint8Array(3 + u.length + pw.length); msg[0]=1; msg[1]=u.length; msg.set(u,2); msg[2+u.length]=pw.length; msg.set(pw,3+u.length);
+      await conn.writer.write(msg);
+      const a = await conn.reader.read(); if (a.done || a.value[1] !== 0) throw new Error('socks auth failed');
+    } else if (h.value[1] !== 0) throw new Error('socks method rejected');
+    const hostBytes = enc.encode(targetHost);
+    const req = new Uint8Array(7 + hostBytes.length);
+    req[0]=5; req[1]=1; req[2]=0; req[3]=3; req[4]=hostBytes.length; req.set(hostBytes,5); req[5+hostBytes.length]=(targetPort>>8)&255; req[6+hostBytes.length]=targetPort&255;
+    await conn.writer.write(req);
+    const r = await conn.reader.read();
+    if (r.done || r.value.length < 2 || r.value[1] !== 0) throw new Error('socks connect failed');
+    return conn;
+  } catch (e) { try { conn.socket.close(); } catch(_){} return null; }
+}
+async function connectViaProxy(proxyEntry, targetHost, targetPort) {
+  const proxy = parseProxyEntry(proxyEntry);
+  if (!proxy) return null;
+  if (proxy.protocol === 'socks5' || proxy.protocol === 'socks4') return socks5Connect(proxy,targetHost,targetPort);
+  return httpConnect(proxy,targetHost,targetPort);
+}
+async function getCountryProxy(env, code) {
+  try {
+    const raw = await env.SPIDER_KV.get('proxies') || '[]';
+    const list = JSON.parse(raw);
+    const loc = list.find(x => String(x.code || '').toLowerCase() === String(code || '').toLowerCase());
+    if (!loc) return '';
+    return String(loc.proxy || ((loc.proxies || [])[0]) || '');
+  } catch (e) { return ''; }
+}
+async function getAnyProxy(env) {
+  try {
+    const raw = await env.SPIDER_KV.get('proxies') || '[]';
+    const list = JSON.parse(raw);
+    for (const loc of list) {
+      const p = String(loc.proxy || ((loc.proxies || [])[0]) || '').trim();
+      if (p) return p;
     }
   } catch (e) {}
-  return null;
+  return '';
 }
 
 // ── VLESS WebSocket Tunnel ──────────────────────────────────────────────────
@@ -254,22 +321,25 @@ async function handleVlessWs(request, env, country, preUser) {
         }, IP_HEARTBEAT_MS);
       }
 
-      // Resolve proxy: country route → country's proxy; otherwise user's proxy_ip
+      // The Worker is the public VLESS endpoint. The VLESS target is commonly
+      // the same Worker domain, so connecting directly would loop back into the
+      // Worker. Always use a real outbound proxy/relay when available.
       let proxy = '';
       if (country) proxy = await getCountryProxy(env, country);
       if (!proxy) proxy = user.proxy_ip;
+      if (!proxy) proxy = await getAnyProxy(env);
 
-      // Establish outbound connection
       let conn = null;
-      if (proxy) {
-        conn = await connectToProxy(proxy);
+      if (proxy) conn = await connectViaProxy(proxy, h.address, h.port);
+      if (!conn) {
+        // Only permit direct mode when the target is not the Worker itself.
+        const targetHost = String(h.address || '').toLowerCase();
+        if (targetHost && targetHost !== String(WORKER_DOMAIN || '').toLowerCase()) {
+          conn = await openSocket(targetHost, h.port);
+        }
       }
       if (!conn) {
-        // Direct connection to target (no proxy)
-        conn = await connectDirect(h.address, h.port);
-      }
-      if (!conn) {
-        try { server.close(4001, 'connect failed'); } catch(e){}
+        try { server.close(4001, 'outbound connect failed'); } catch(e){}
         return;
       }
 
@@ -314,14 +384,21 @@ async function handleVlessWs(request, env, country, preUser) {
 
 // ── TCP → WebSocket Pump ────────────────────────────────────────────────────
 async function pumpTcpToWs(conn, server) {
+  let sentVlessResponseHeader = false;
   try {
     while (true) {
       const { done, value } = await conn.reader.read();
       if (done) break;
       if (value && value.length) {
-        // VLESS over WS: frame = [0x00 0x00] + data
-        const frame = new Uint8Array(value.length + 2);
-        frame[0] = 0; frame[1] = 0; frame.set(value, 2);
+        let frame = value;
+        if (!sentVlessResponseHeader) {
+          // VLESS response header is sent once. Prefixing every TCP chunk with
+          // 00 00 corrupts TLS/HTTP streams and was the primary reason Worker
+          // configs appeared connected but never transferred data.
+          frame = new Uint8Array(value.length + 2);
+          frame[0] = 0; frame[1] = 0; frame.set(value, 2);
+          sentVlessResponseHeader = true;
+        }
         try { server.send(frame); } catch(e){ break; }
       }
     }
@@ -360,7 +437,7 @@ function workerConfigsForUser(u) {
   for (const code of countries) {
     const path = code ? `/route/${encodeURIComponent(String(code).toLowerCase())}` : `/${u.uuid}`;
     const remark = `${u.remark || 'user'}${code ? ' ' + String(code).toUpperCase() : ''}`;
-    const q = `encryption=none&security=tls&sni=${encodeURIComponent(location.hostname)}&host=${encodeURIComponent(location.hostname)}&fp=chrome&type=ws&path=${encodeURIComponent(path)}`;
+    const q = `encryption=none&security=tls&sni=${encodeURIComponent(WORKER_DOMAIN)}&host=${encodeURIComponent(WORKER_DOMAIN)}&fp=chrome&type=ws&path=${encodeURIComponent(path)}`;
     out.push(`vless://${u.uuid}@${WORKER_DOMAIN}:443?${q}#${encodeURIComponent(remark)}`);
   }
   return out;
