@@ -20,6 +20,7 @@ from collections import deque, defaultdict
 import base64
 import io
 import logging
+import ssl
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("Spider-Gateway")
@@ -6846,6 +6847,41 @@ def _read_sni_results() -> list:
     return out
 
 
+@app.get("/api/scanner/sni-check")
+async def scanner_sni_check(host: str, _=Depends(require_auth)):
+    """Live Reality-SNI TLS handshake check.
+
+    The browser should not directly fetch arbitrary SNI hosts because CORS,
+    mixed-content rules and certificate errors can make a reachable SNI look
+    dead.  The panel server performs a real TLS handshake with SNI and returns
+    the measured latency immediately for each host.
+    """
+    host = str(host or "").strip().lower()
+    # Basic hostname validation. Do not accept URLs, paths or arbitrary text.
+    if not host or len(host) > 253 or any(ch.isspace() for ch in host) or "/" in host:
+        raise HTTPException(status_code=400, detail="invalid SNI host")
+
+    started = time.perf_counter()
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    try:
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(host, 443, ssl=context, server_hostname=host),
+            timeout=2.5,
+        )
+        latency_ms = round((time.perf_counter() - started) * 1000, 2)
+        try:
+            writer.close()
+            await writer.wait_closed()
+        except Exception:
+            pass
+        return {"ok": True, "sni": host, "latency_ms": latency_ms}
+    except Exception as e:
+        latency_ms = round((time.perf_counter() - started) * 1000, 2)
+        return {"ok": False, "sni": host, "latency_ms": latency_ms, "error": str(e)[:160]}
+
+
 @app.get("/api/scanner/sni-scan-list")
 async def scanner_sni_scan_list(_=Depends(require_auth)):
     """Return the SNI list for scanning."""
@@ -6875,26 +6911,50 @@ async def scanner_sni_clear_results(_=Depends(require_auth)):
 
 @app.post("/api/scanner/sni-save-results")
 async def scanner_sni_save_results(request: Request, _=Depends(require_auth)):
-    """Save the top N fastest SNIs to the results file."""
+    """Merge live SNI results into sni_reality.txt and keep the fastest 3."""
     body = await request.json()
-    results = body.get("results") or []
-    top_n = int(body.get("top") or 3)
-    # Sort by latency and take top N
-    results.sort(key=lambda r: r.get("latency_ms", 99999))
-    results = results[:top_n]
+    incoming = body.get("results") or []
+    top_n = max(1, min(int(body.get("top") or 3), 10))
+    merged = {}
+
+    # Preserve existing successful results so concurrent live updates cannot
+    # overwrite a faster SNI with a slower result that arrived later.
+    for old in _read_sni_results():
+        sni = str(old.get("sni") or "").strip().lower()
+        try:
+            lat = float(old.get("latency_ms"))
+        except Exception:
+            continue
+        if sni and lat >= 0:
+            merged[sni] = lat
+
+    for r in incoming:
+        sni = str(r.get("sni") or "").strip().lower()
+        try:
+            lat = float(r.get("latency_ms"))
+        except Exception:
+            continue
+        if sni and lat >= 0 and (sni not in merged or lat < merged[sni]):
+            merged[sni] = lat
+
+    ordered = sorted(
+        ({"sni": sni, "latency_ms": round(lat, 2)} for sni, lat in merged.items()),
+        key=lambda x: x["latency_ms"],
+    )[:top_n]
     try:
         f = _sni_result_file()
         f.parent.mkdir(parents=True, exist_ok=True)
-        lines = ["# Fastest SNIs for Reality (auto-populated by SNI scanner)", "# Format: sni|latency_ms"]
-        for r in results:
-            sni = r.get("sni", "")
-            lat = r.get("latency_ms", 0)
-            if sni:
-                lines.append(f"{sni}|{lat}")
+        lines = [
+            "# Fastest SNIs for Reality (live scanner)",
+            "# Format: sni|latency_ms",
+        ]
+        for r in ordered:
+            lines.append(f"{r['sni']}|{r['latency_ms']}")
         f.write_text("\n".join(lines) + "\n", encoding="utf-8")
     except Exception as e:
         logger.warning(f"Could not save SNI results: {e}")
-    return {"ok": True, "saved": len(results), "results": results}
+        raise HTTPException(status_code=500, detail="could not save SNI results")
+    return {"ok": True, "saved": len(ordered), "results": ordered}
 
 
 @app.get("/api/scanner/sni-fastest")

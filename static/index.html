@@ -548,13 +548,22 @@ input,select,button,textarea{font-family:inherit}
 .tab-content:not(.hidden){display:flex;flex-direction:column;position:static!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;transform:none!important;width:100%;margin-top:0!important;align-self:stretch;}
 /* Settings / Contact / Worker must always start at the top of the content area. */
 #tab-worker,#tab-settings,#tab-contact{
-  position:static!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;
-  transform:none!important;width:100%!important;margin:0!important;padding:0!important;
-  align-self:flex-start!important;flex:0 0 auto!important;min-height:auto!important;height:auto!important;
+  position:static!important;top:0!important;right:auto!important;bottom:auto!important;left:auto!important;
+  transform:none!important;display:block!important;width:100%!important;margin:0!important;padding:0!important;
+  align-self:flex-start!important;flex:none!important;min-height:0!important;height:auto!important;
+  max-height:none!important;overflow:visible!important;contain:none!important;
   justify-content:flex-start!important;align-items:stretch!important;
+  scroll-margin-top:0!important;overflow-anchor:none!important;
 }
-#tab-worker>.panel,#tab-settings>.panel,#tab-contact>.panel{margin:0 0 14px 0!important;position:static!important;transform:none!important;}
-.content{justify-content:flex-start!important;align-items:stretch!important;}
+#tab-worker.hidden,#tab-settings.hidden,#tab-contact.hidden{display:none!important;}
+#tab-worker>.panel,#tab-settings>.panel,#tab-contact>.panel{
+  display:block!important;box-sizing:border-box!important;float:none!important;position:static!important;
+  top:auto!important;bottom:auto!important;transform:none!important;
+  margin:0 0 14px 0!important;max-height:none!important;overflow:visible!important;
+}
+#tab-worker .panel:first-child,#tab-contact .panel:first-child{margin-top:0!important;}
+#tab-contact .contact-panel{height:auto!important;min-height:0!important;max-height:none!important;}
+.content{justify-content:flex-start!important;align-items:stretch!important;overflow-anchor:none!important;scroll-padding-top:0!important;}
 
 /* LTR (English) adjustments — iOS system font */
 html[lang="en"] body, html[lang="en"] .sidebar, html[lang="en"] .panel, html[lang="en"] .btn { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, 'Segoe UI', Roboto, sans-serif; }
@@ -1969,21 +1978,44 @@ function updateGreeting() {
 function switchTab(tab, el) {
   document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
   if (el) el.classList.add('active');
+  var content = document.querySelector('.content');
   document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.add('hidden'); });
   var target = $id('tab-' + tab);
-  if (target) target.classList.remove('hidden');
-  // Every tab starts at the top; do not inherit the previous tab's scroll position.
-  var content = document.querySelector('.content');
-  if (content) { content.scrollTop = 0; content.scrollLeft = 0; }
-  if (target) { target.scrollTop = 0; target.scrollLeft = 0; target.style.marginTop = '0px'; }
-  window.scrollTo(0, 0);
+  if (!target) return;
+
+  // Prevent the previous tab's scroll position / scroll anchoring from
+  // pushing Worker or Contact below the viewport.
+  if (content) {
+    content.style.scrollBehavior = 'auto';
+    content.scrollTop = 0;
+    content.scrollLeft = 0;
+  }
+  target.classList.remove('hidden');
+  target.style.setProperty('margin-top', '0px', 'important');
+  target.style.setProperty('top', '0px', 'important');
+  target.style.setProperty('transform', 'none', 'important');
+  if (tab === 'worker' || tab === 'contact' || tab === 'settings') {
+    target.style.setProperty('position', 'static', 'important');
+    target.style.setProperty('display', 'block', 'important');
+    target.style.setProperty('flex', 'none', 'important');
+  }
+
+  // Two layout passes are intentional: one immediately after display and
+  // one after the browser has painted the new tab.
+  var resetScroll = function() {
+    if (content) { content.scrollTop = 0; content.scrollLeft = 0; }
+    target.scrollTop = 0; target.scrollLeft = 0;
+    document.documentElement.scrollTop = 0; document.body.scrollTop = 0;
+  };
+  resetScroll();
+  requestAnimationFrame(resetScroll);
+
   stopLiveStats();
   if (tab === 'dashboard') loadDashboard();
   if (tab === 'users') loadUsers();
   if (tab === 'inbounds') loadInbounds();
   if (tab === 'scanner') scnInit();
   if (tab === 'worker') loadWorker();
-  // Close sidebar on mobile
   closeSidebar();
 }
 
@@ -3219,68 +3251,92 @@ async function scnRunSingleSni() {
 
 async function scnRunAutoSni() {
   SCN_SNI_STOP = false;
-  // Every scan starts from an empty result set: no built-in/default SNI is shown.
-  try { await api('/api/scanner/sni-clear-results', {method: 'POST'}); } catch(e) {}
-  var savedEl = $id('scn-sni-results'); if (savedEl) savedEl.innerHTML = '<span class="scn-empty">در حال اسکن...</span>';
   var btn = $id('scn-sni-auto-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'در حال اسکن...'; }
   var list = $id('scn-sni-list');
-  list.innerHTML = '<div class="scn-empty">در حال دریافت لیست SNI...</div>';
+  var savedEl = $id('scn-sni-results');
+  if (btn) { btn.disabled = true; btn.textContent = 'در حال اسکن...'; }
+  if (list) list.innerHTML = '<div class="scn-empty">در حال دریافت لیست SNI...</div>';
+  if (savedEl) savedEl.innerHTML = '<span class="scn-empty">در حال اسکن...</span>';
   $id('scn-sni-tried').textContent = '۰';
   $id('scn-sni-found').textContent = '۰';
   $id('scn-sni-best').textContent = '--';
   $id('scn-sni-bar').style.width = '0%';
-  try {
-    var sr = await api('/api/scanner/sni-scan-list');
-    var snis = sr.snis || [];
-    if (!snis.length) { list.innerHTML = '<div class="scn-empty">لیست SNI خالی است</div>'; if(btn){btn.disabled=false;btn.textContent='Auto Scan';} return; }
-    // Scan in batches of 8
-    var BATCH = 8;
-    var allResults = [];
-    var tried = 0;
-    for (var i = 0; i < snis.length && !SCN_SNI_STOP; i += BATCH) {
-      var batch = snis.slice(i, i + BATCH).map(function(s) { return s + ':443'; });
-      var r = await scnPingBatch(batch, 1.5);
-      var res = r.results || [];
-      allResults = allResults.concat(res);
-      tried += res.length;
-      var okCount = allResults.filter(function(x) { return x.ok; }).length;
-      $id('scn-sni-tried').textContent = toFa(tried);
-      $id('scn-sni-found').textContent = toFa(okCount);
-      var pct = Math.round((tried / snis.length) * 100);
-      $id('scn-sni-bar').style.width = pct + '%';
-      // Live render
-      var okList = allResults.filter(function(x) { return x.ok; }).sort(function(a,b) { return a.latency_ms - b.latency_ms; });
-      if (okList.length) $id('scn-sni-best').textContent = okList[0].latency_ms + 'ms';
-      var rows = '';
-      okList.slice(0, 20).forEach(function(x) {
-        rows += '<div class="scn-item"><span class="scn-ip">' + esc(x.target.replace(':443','')) + '</span>' +
-          '<span class="scn-ms good">' + x.latency_ms + 'ms</span></div>';
-      });
-      list.innerHTML = rows || '<div class="scn-empty">در حال اسکن...</div>';
-      // Persist the current fastest results immediately, not only at the end.
-      var liveTop = okList.slice(0, 3).map(function(x) { return { sni: x.target.replace(':443',''), latency_ms: x.latency_ms }; });
-      if (liveTop.length) {
-        await api('/api/scanner/sni-save-results', {method: 'POST', body: {results: liveTop, top: 3}});
-        scnLoadSniResults();
-      }
-      // Rate limit between batches
-      if (i + BATCH < snis.length && !SCN_SNI_STOP) {
-        await new Promise(function(r) { setTimeout(r, 200); });
-      }
-    }
-    // Save top 3
-    var okAll = allResults.filter(function(x) { return x.ok; }).sort(function(a,b) { return a.latency_ms - b.latency_ms; });
-    var top3 = okAll.slice(0, 3).map(function(x) { return { sni: x.target.replace(':443',''), latency_ms: x.latency_ms }; });
-    if (top3.length) {
-      await api('/api/scanner/sni-save-results', {method: 'POST', body: {results: top3, top: 3}});
-      toast(top3.length + ' SNI ذخیره شد', 'ok');
-      scnLoadSniResults();
-    }
-  } catch(e) { list.innerHTML = '<div class="scn-empty">خطا: ' + esc(e.message) + '</div>'; }
-  if (btn) { btn.disabled = false; btn.textContent = 'Auto Scan'; }
-}
 
+  try {
+    // Clear previous results before the new run, but do not wait for any
+    // scanner work. This keeps the UI responsive from the first frame.
+    try { await api('/api/scanner/sni-clear-results', {method:'POST'}); } catch (_) {}
+    var sr = await api('/api/scanner/sni-scan-list');
+    var snis = Array.isArray(sr.snis) ? sr.snis.map(function(x){ return String(x).trim(); }).filter(Boolean) : [];
+    if (!snis.length) {
+      if (list) list.innerHTML = '<div class="scn-empty">لیست SNI خالی است</div>';
+      if (btn) { btn.disabled = false; btn.textContent = 'Auto Scan'; }
+      return;
+    }
+
+    var total = snis.length, tried = 0, found = 0;
+    var live = [];
+    var active = 0, next = 0;
+    var CONCURRENCY = 4;
+
+    function renderLive() {
+      var ordered = live.slice().sort(function(a,b){ return a.latency_ms - b.latency_ms; });
+      if ($id('scn-sni-tried')) $id('scn-sni-tried').textContent = toFa(tried);
+      if ($id('scn-sni-found')) $id('scn-sni-found').textContent = toFa(found);
+      if ($id('scn-sni-best')) $id('scn-sni-best').textContent = ordered.length ? Math.round(ordered[0].latency_ms) + 'ms' : '--';
+      if ($id('scn-sni-bar')) $id('scn-sni-bar').style.width = Math.round((tried / total) * 100) + '%';
+      if (list) {
+        var rows = ordered.slice(0, 20).map(function(x) {
+          return '<div class="scn-item"><span class="scn-ip">' + esc(x.sni) + '</span><span class="scn-ms good">' + Math.round(x.latency_ms) + 'ms</span></div>';
+        }).join('');
+        list.innerHTML = rows || '<div class="scn-empty">در حال اسکن...</div>';
+      }
+      var top3 = ordered.slice(0,3).map(function(x){ return {sni:x.sni, latency_ms:Math.round(x.latency_ms)}; });
+      if (top3.length) {
+        // Save on every improvement. The file therefore follows the live UI.
+        api('/api/scanner/sni-save-results', {method:'POST', body:{results:top3, top:3}})
+          .then(function(){ scnLoadSniResults(); }).catch(function(){});
+      }
+    }
+
+    return new Promise(function(resolve) {
+      function launch() {
+        if (SCN_SNI_STOP || next >= total) {
+          if (active === 0) resolve();
+          return;
+        }
+        while (!SCN_SNI_STOP && active < CONCURRENCY && next < total) {
+          (function(sni) {
+            next++; active++;
+            api('/api/scanner/sni-check?host=' + encodeURIComponent(sni))
+              .then(function(r) {
+                tried++;
+                if (r && r.ok) {
+                  found++;
+                  live.push({sni:sni, latency_ms:Number(r.latency_ms || 0)});
+                  live.sort(function(a,b){return a.latency_ms-b.latency_ms;});
+                  live = live.slice(0, 20);
+                }
+                renderLive();
+              })
+              .catch(function(){ tried++; renderLive(); })
+              .finally(function(){
+                active--;
+                if (next >= total && active === 0) resolve(); else launch();
+              });
+          })(snis[next]);
+        }
+      }
+      launch();
+    });
+
+  } catch (e) {
+    if (list) list.innerHTML = '<div class="scn-empty">خطا: ' + esc(e.message || String(e)) + '</div>';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Auto Scan'; }
+    scnLoadSniResults();
+  }
+}
 function scnStopSni() { SCN_SNI_STOP = true; toast(t('scanStopped'), 'warn'); }
 
 async function scnLoadSniResults() {
