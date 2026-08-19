@@ -1333,8 +1333,9 @@ async def _start_telegram_proxy(inbound_id: str, inbound: dict):
             iids = u.get("inbound_ids") or []
             if inbound_id in iids:
                 config_uuid = u.get("config_uuid", uid)
-                secret = u.get("telegram_secret") or derive_secret_from_uuid(config_uuid)
-                if not u.get("telegram_secret"):
+                secret = str(u.get("telegram_secret") or "").strip().lower()
+                if not re.fullmatch(r"[0-9a-f]{32}", secret) or not secret.startswith("dd"):
+                    secret = derive_secret_from_uuid(config_uuid)
                     u["telegram_secret"] = secret
                 secrets_map[secret] = {"user_id": uid, "config_uuid": config_uuid, "label": u.get("username", uid)}
 
@@ -3344,8 +3345,12 @@ async def create_user(request: Request, _=Depends(require_auth)):
             from telegram_proxy import derive_secret_from_uuid
             async with USERS_LOCK:
                 u = USERS.get(user_id)
-                if u and not u.get("telegram_secret"):
-                    u["telegram_secret"] = derive_secret_from_uuid(config_uuid)
+                if u:
+                    current = str(u.get("telegram_secret") or "").strip().lower()
+                    # Regenerate old/invalid ee-prefixed secrets because the
+                    # panel now uses the maintained secure MTProxy mode.
+                    if not re.fullmatch(r"[0-9a-f]{32}", current) or not current.startswith("dd"):
+                        u["telegram_secret"] = derive_secret_from_uuid(config_uuid)
             asyncio.create_task(save_state())
     host = SETTINGS.get("domain") or get_host()
     asyncio.create_task(_xray_apply())  # refresh Xray clients after user change
