@@ -518,11 +518,11 @@ input,select,button,textarea{font-family:inherit}
 .sb-brand-t{font-size:17px;font-weight:800;letter-spacing:3px;background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .sb-brand-t span{color:inherit;-webkit-text-fill-color:inherit}
 .sb-brand-s{font-size:10px;color:var(--txt2);letter-spacing:5px;margin-top:2px}
-.sb-nav{flex:1;padding:10px;overflow-y:auto}
+.sb-nav{flex:1;padding:10px;overflow-y:auto;display:flex;flex-direction:column;justify-content:flex-start;gap:2px}
 .nav-item{
   padding:11px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;
   font-size:13px;font-weight:500;color:var(--txt2);transition:all .2s;
-  border-radius:12px;margin:2px 0;position:relative;
+  border-radius:12px;margin:0;position:relative;
 }
 .nav-item:hover{color:var(--txt);background:rgba(43,127,255,.06)}
 .nav-item.active{color:var(--nav-color);background:var(--nav-bg);border:1px solid var(--border-glow)}
@@ -840,6 +840,31 @@ tr{animation:fadeIn .3s ease}
   .px-tools .btn{flex:1 1 auto}
   .f-r{flex-wrap:wrap}
   .f-r > .f-g{min-width:100%}
+
+  /* Mobile fix for SNI Scanner inputs - prevent squishing */
+  .scn-cfg div[style*="display:flex"] {
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  #scn-sni-input {
+    width: 100% !important;
+    min-height: 48px; /* Larger touch target */
+    font-size: 16px !important;
+  }
+
+  .scn-cfg .btn {
+    width: 100% !important;
+    min-height: 48px;
+  }
+
+  /* Mobile fix for inbound modal fields */
+  .modal-c .f-r {
+    flex-direction: column !important;
+  }
+  .modal-c .f-g {
+    min-width: 100% !important;
+  }
 }
 /* Users table on small screens: let each row stack so nothing is cut off */
 @media(max-width:640px){
@@ -1432,7 +1457,6 @@ tr{animation:fadeIn .3s ease}
     <input type="hidden" id="ib-id">
     <div class="f-g"><label data-i18n="inboundName">نام اینباند</label><input type="text" id="ib-name" required data-i18n-placeholder="inboundName" placeholder="مثال: Main-WS"></div>
     <div class="f-r">
-      <div class="f-g"><label data-i18n="intPort">پورت اصلی</label><input type="number" id="ib-port" required placeholder="8443" dir="ltr"></div>
       <div class="f-g"><label>Protocol</label><select id="ib-protocol" onchange="onProtocolChange()">
         <option value="vless">VLESS</option>
         <option value="wireguard">WireGuard / AmneziaWG</option>
@@ -2596,11 +2620,10 @@ async function submitInbound(e) {
   var body = {
     name: $id('ib-name').value,
     protocol: proto,
-    port: parseInt($id('ib-port').value) || (isWg ? 51820 : 8443),
   };
 
   if (isWg) {
-    // WireGuard inbound
+    // WireGuard inbound - no port field needed, uses endpoint
     body.wireguard_settings = {
       warp_mode: $id('ib-wg-warp').classList.contains('on'),
       endpoint: $id('ib-wg-endpoint').value || '',
@@ -2620,14 +2643,17 @@ async function submitInbound(e) {
       i1: $id('ib-wg-i1').value || ''
     };
   } else if (proto === 'telegram') {
-    // Telegram Proxy inbound
+    // Telegram Proxy inbound - only 3 fields: internal_port, external_port, external_domain
+    var internalPort = parseInt($id('ib-tg-intport').value) || 44344;
+    var externalPort = parseInt($id('ib-tg-extport').value) || 443;
     body.telegram_settings = {
-      internal_port: parseInt($id('ib-tg-intport').value) || 443,
-      external_port: parseInt($id('ib-tg-extport').value) || 443,
+      internal_port: internalPort,
+      external_port: externalPort,
       external_domain: $id('ib-tg-domain').value || ''
     };
-    body.port = parseInt($id('ib-tg-intport').value) || 443;
-    body.external_port = parseInt($id('ib-tg-extport').value) || 443;
+    // Use internal_port as the listening port
+    body.port = internalPort;
+    body.external_port = externalPort;
     body.external_domain = $id('ib-tg-domain').value || '';
   } else {
     // VLESS / TLS / Reality

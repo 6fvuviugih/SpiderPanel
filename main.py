@@ -760,12 +760,9 @@ def generate_telegram_proxy_link(user_id: str, user: dict, inbound: dict, remark
     # Use stored secret or derive a stable one
     secret = user.get("telegram_secret") or derive_secret_from_uuid(config_uuid)
 
-    rem = f"Spider-{username}-TG"
-    if remark_tag:
-        rem = f"{rem} {remark_tag}"
-
-    from urllib.parse import quote
-    link = f"https://t.me/proxy?server={external_domain}&port={external_port}&secret={secret}#{quote(rem)}"
+    # Note: Telegram t.me/proxy links don't support #remark fragment like VLESS links
+    # The name is set by the user in the Telegram app after adding the proxy
+    link = f"https://t.me/proxy?server={external_domain}&port={external_port}&secret={secret}"
     return link
 
 
@@ -1080,7 +1077,7 @@ async def startup():
 # ── Telegram Proxy Lifecycle ────────────────────────────────────────────────
 async def _start_all_telegram_proxies():
     """Start MTProto proxy servers for all Telegram inbounds."""
-    from telegram_proxy import MTProtoProxyServer, derive_secret_from_uuid
+    from telegram_proxy import derive_secret_from_uuid, is_docker_available, run_docker_telegram_proxy, stop_docker_telegram_proxy
     async with INBOUNDS_LOCK:
         snap = dict(INBOUNDS)
     for iid, ib in snap.items():
@@ -1089,13 +1086,66 @@ async def _start_all_telegram_proxies():
 
 
 async def _start_telegram_proxy(inbound_id: str, inbound: dict):
-    """Start or restart an MTProto proxy server for a Telegram inbound."""
-    from telegram_proxy import MTProtoProxyServer, derive_secret_from_uuid
+    """Start or restart a Telegram proxy server for a Telegram inbound.
+    Uses Docker with the official telegrammessenger/proxy image if available,
+    otherwise falls back to built-in Python MTProto proxy.
+    """
+    from telegram_proxy import derive_secret_from_uuid, is_docker_available, run_docker_telegram_proxy
 
     # Stop existing instance if any
     await _stop_telegram_proxy(inbound_id)
 
     tg = inbound.get("telegram_settings") or {}
+    int_port = int(tg.get("internal_port") or inbound.get("port") or 44344)
+    external_domain = tg.get("external_domain") or inbound.get("external_domain") or ""
+    external_port = tg.get("external_port") or inbound.get("external_port") or "443"
+
+    # Build secrets map: secret_hex -> {user_id, config_uuid, label}
+    secrets_map = {}
+    async with USERS_LOCK:
+        for uid, u in USERS.items():
+            iids = u.get("inbound_ids") or []
+            if inbound_id in iids:
+                config_uuid = u.get("config_uuid", uid)
+                secret = u.get("telegram_secret") or derive_secret_from_uuid(config_uuid)
+                # Store the derived secret on the user if not already set
+                if not u.get("telegram_secret"):
+                    u["telegram_secret"] = secret
+                secrets_map[secret] = {
+                    "user_id": uid,
+                    "config_uuid": config_uuid,
+                    "label": u.get("username", uid),
+                }
+
+    # Generate container name
+    container_name = f"spider-tg-proxy-{inbound_id}"
+
+    # Determine domain for the proxy
+    domain = external_domain or inbound.get("external_domain") or ""
+
+    # Try Docker first if available
+    docker_started = False
+    if is_docker_available():
+        # For Docker, we use the internal port as the container's exposed port
+        # The Docker image runs on port 443 internally, mapped to int_port on host
+        for secret in secrets_map:
+            success = await run_docker_telegram_proxy(
+                container_name=f"spider-tg-proxy-{inbound_id}-{secret[:8]}",
+                port=int_port,
+                secret=secret,
+                domain="",
+            )
+            if success:
+                docker_started = True
+                break
+
+    if docker_started:
+        log_activity("telegram-proxy", f"Telegram Proxy (Docker) started on port {int_port}", "ok")
+        return
+
+    # Fallback to built-in Python MTProto proxy
+    from telegram_proxy import MTProtoProxyServer, derive_secret_from_uuid
+
     int_port = int(tg.get("internal_port") or inbound.get("port") or 44344)
 
     server = MTProtoProxyServer(
@@ -1134,16 +1184,38 @@ async def _start_telegram_proxy(inbound_id: str, inbound: dict):
     try:
         await server.start()
         TG_PROXY_INSTANCES[inbound_id] = server
-        log_activity("telegram-proxy", f"Telegram Proxy started on port {int_port}", "ok")
+        log_activity("telegram-proxy", f"Telegram Proxy (Python) started on port {int_port}", "ok")
     except Exception as e:
         logger.error(f"Failed to start TG proxy for {inbound_id}: {e}")
 
 
 async def _stop_telegram_proxy(inbound_id: str):
-    """Stop the MTProto proxy server for a Telegram inbound."""
+    """Stop the Telegram proxy server for a Telegram inbound (both Python and Docker)."""
+    # Stop Python proxy if running
     server = TG_PROXY_INSTANCES.pop(inbound_id, None)
     if server:
         await server.stop()
+
+    # Stop Docker containers if any
+    from telegram_proxy import stop_docker_telegram_proxy, is_docker_available
+    if is_docker_available():
+        # Stop all containers for this inbound_id
+        for i in range(10):  # Try up to 10 possible container names (for different secrets)
+            container_name = f"spider-tg-proxy-{inbound_id}-"
+            # We can't know the exact secret suffix, so we'll stop any matching
+            import subprocess
+            try:
+                result = subprocess.run(
+                    ["docker", "ps", "-a", "--filter", f"name=spider-tg-proxy-{inbound_id}-", "--format", "{{.Names}}"],
+                    capture_output=True, text=True, timeout=10
+                )
+                for name in result.stdout.strip().split('\n'):
+                    if name:
+                        subprocess.run(["docker", "stop", name], capture_output=True, timeout=10)
+                        subprocess.run(["docker", "rm", name], capture_output=True, timeout=10)
+                        logger.info(f"Stopped Docker Telegram proxy: {name}")
+            except Exception as e:
+                logger.error(f"Failed to stop Docker Telegram proxy: {e}")
 
 
 async def _restart_telegram_proxy(inbound_id: str):
@@ -2533,8 +2605,15 @@ async def create_inbound(request: Request, _=Depends(require_auth)):
     sni = str(body.get("sni") or "").strip()
     destination = str(body.get("destination") or "").strip()
     server_name = str(body.get("server_name") or "").strip()
-    port = int(body.get("port") or 443)
-    external_port = int(body.get("external_port") or 443)
+
+    # For WireGuard and Telegram, port is not required (they use internal_port in settings)
+    if protocol in ("wireguard", "telegram"):
+        port = 0
+        external_port = 0
+    else:
+        port = int(body.get("port") or 443)
+        external_port = int(body.get("external_port") or 443)
+
     fingerprint = str(body.get("fingerprint") or "chrome").strip()
     spoof_ip = str(body.get("spoof_ip") or "").strip()
     reality_settings = body.get("reality_settings", {}) if isinstance(body.get("reality_settings"), dict) else {}
