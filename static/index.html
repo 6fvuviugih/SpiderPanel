@@ -881,14 +881,62 @@ tr{animation:fadeIn .3s ease}
 </style>
 <style>
 
-/* Worker / Contact Me: no vertical auto-spacing */
-.content { align-items:flex-start; }
-.tab-content { margin:0 !important; padding:0 !important; min-height:0 !important; }
-#tab-worker, #tab-contact { margin:0 !important; padding:0 !important; min-height:0 !important; align-self:flex-start; }
-#tab-worker > .panel, #tab-contact > .panel { margin-top:0 !important; }
-#tab-contact .contact-panel { margin-top:0 !important; align-self:flex-start; }
-/* Sidebar: keep items compact and anchored to the top */
-.sb-nav { flex:0 1 auto; justify-content:flex-start; gap:2px; }
+/* ===== Worker & Contact layout — match the other dashboard panels ===== */
+.content {
+  display: block !important;
+  padding: 20px 24px !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+.tab-content {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+.tab-content.hidden { display: none !important; }
+#tab-worker, #tab-contact {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+#tab-worker > .panel,
+#tab-contact > .panel {
+  display: block;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  margin: 0 0 16px 0;
+}
+#tab-contact > .contact-panel {
+  width: 100%;
+  min-height: 0;
+  align-items: stretch;
+  text-align: center;
+}
+#tab-contact .panel-h,
+#tab-contact .contact-sub,
+#tab-contact .contact-bubbles {
+  width: 100%;
+  box-sizing: border-box;
+}
+#tab-contact .contact-bubbles {
+  justify-content: center;
+}
+/* Keep sidebar items at the top; do not let flex:1 create a large vertical gap. */
+.sb-nav {
+  flex: 0 1 auto;
+  justify-content: flex-start;
+  align-content: flex-start;
+  gap: 2px;
+  min-height: 0;
+}
+@media (max-width:700px) {
+  .content { padding: 12px !important; }
+  #tab-worker > .panel,
+  #tab-contact > .panel { width: 100%; }
+}
 
 </style>
 </head>
@@ -1962,19 +2010,6 @@ function switchTab(tab, el) {
   document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.add('hidden'); });
   var target = $id('tab-' + tab);
   if (target) target.classList.remove('hidden');
-
-  // Always start a newly selected tab at the top. Without this, the shared
-  // .content scroll position makes Worker/Contact Me appear far down the page.
-  var content = document.querySelector('.content');
-  if (content) content.scrollTop = 0;
-
-  // Keep the sidebar navigation positioned at the top when switching tabs.
-  var nav = document.querySelector('.sb-nav');
-  if (nav && el) {
-    var navTop = el.offsetTop - 10;
-    nav.scrollTo({ top: Math.max(0, navTop), behavior: 'smooth' });
-  }
-
   stopLiveStats();
   if (tab === 'dashboard') loadDashboard();
   if (tab === 'users') loadUsers();
@@ -2780,7 +2815,7 @@ document.addEventListener('DOMContentLoaded', wireModalCloseButtons);
 wireModalCloseButtons();
 
 // ─── DOM Helper ───
-// $id is defined once in the main script.
+const $id = (id) => document.getElementById(id);
 
 // ─── Helpers ───
 function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
