@@ -3920,6 +3920,8 @@ function cuWorkerProxies() { return (WK_STATE && WK_STATE.proxies) || cuWorkerPr
 function cuInboundType(ib) {
   var p = (ib && ib.protocol || '').toLowerCase();
   if (p === 'worker') return 'worker';
+  if (p === 'wireguard') return 'wireguard';
+  if (p === 'telegram') return 'telegram';
   if (p === 'reality' || (ib && ib.security || '').toLowerCase() === 'reality') return 'reality';
   return 'tls';
 }
@@ -4016,6 +4018,10 @@ function cuRenderInboundOpts() {
           '<span class="set-lbl" style="font-size:11px">' + t('addRailwayIps') + '</span>' +
           '<button type="button" class="ios-switch' + (selt.railway ? ' on' : '') + '" data-type="railway" onclick="cuToggleIpSwitch(\'' + esc(id) + '\',this)"></button>' +
         '</div>';
+      } else if (type === 'wireguard') {
+        html += '<div class="px-hint" style="margin:0">WireGuard — نیازی به IP اضافی نیست</div>';
+      } else if (type === 'telegram') {
+        html += '<div class="px-hint" style="margin:0">Telegram Proxy — نیازی به IP اضافی نیست</div>';
       } else {
         html += '<div class="px-hint" style="margin:0">' + t('realityNoExtra') + '</div>';
       }

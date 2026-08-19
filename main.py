@@ -1755,11 +1755,24 @@ def _worker_configs(user_id: str, user: dict, inbound: dict, stored_path: str, b
       - address = addr_ip (Clean IP) OR worker domain
       - host/sni = worker domain (always, for TLS handshake + SNI routing)
       - path = /route/{code} (always, for country-based proxy selection)
+      - snispoofing = BPB SNI spoofing params (for v2box compatibility)
     """
     wdomain = str(WORKER.get("worker_domain") or "").strip().lower()
     if not wdomain or wdomain in ("localhost", "0.0.0.0", "127.0.0.1"):
         return []
     wport = (inbound.get("external_port") if inbound else None) or (inbound.get("port") if inbound else None) or 443
+
+    # SNI spoofing for v2box: use user settings when enabled, fallback to inbound defaults
+    sni_spoof = bool(user.get("sni_spoof_v2box"))
+    if sni_spoof:
+        fake_sni = str(user.get("fake_sni") or (inbound.get("sni") if inbound else "")) or "www.hcaptcha.com"
+        spoof_ip = str(user.get("spoof_ip") or (inbound.get("spoof_ip") if inbound else "")) or "8.6.112.4"
+        spoof = {"active": True, "fakeSni": fake_sni, "spoofIp": spoof_ip, "targetPort": 443}
+    else:
+        fake_sni = str((inbound.get("sni") if inbound else "")) or "www.hcaptcha.com"
+        spoof_ip = str((inbound.get("spoof_ip") if inbound else "")) or "8.6.112.4"
+        spoof = {"active": True, "fakeSni": fake_sni, "spoofIp": spoof_ip, "targetPort": 0}
+    spoof_q = quote(json.dumps(spoof, separators=(",", ":")), safe="")
 
     cfg_uuid = user.get("config_uuid", "")
     uname = user.get("username", user_id)
@@ -1790,6 +1803,7 @@ def _worker_configs(user_id: str, user: dict, inbound: dict, stored_path: str, b
             "fp": "chrome",
             "type": "ws",
             "path": quote(wpath, safe=''),
+            "snispoofing": spoof_q,
         }
         query = "&".join([f"{k}={v}" for k, v in params.items()])
         configs.append(f"vless://{cfg_uuid}@{address}:{port}?{query}#{rem}")
