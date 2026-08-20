@@ -262,15 +262,7 @@ async function connectViaProxy(proxyEntry, targetHost, targetPort) {
   if (proxy.protocol === 'socks5' || proxy.protocol === 'socks4') return socks5Connect(proxy,targetHost,targetPort);
   return httpConnect(proxy,targetHost,targetPort);
 }
-async function getCountryProxy(env, code) {
-  try {
-    const raw = await env.SPIDER_KV.get('proxies') || '[]';
-    const list = JSON.parse(raw);
-    const loc = list.find(x => String(x.code || '').toLowerCase() === String(code || '').toLowerCase());
-    if (!loc) return '';
-    return String(loc.proxy || ((loc.proxies || [])[0]) || '');
-  } catch (e) { return ''; }
-}
+
 async function getAnyProxy(env) {
   try {
     const raw = await env.SPIDER_KV.get('proxies') || '[]';
