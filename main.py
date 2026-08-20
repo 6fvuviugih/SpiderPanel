@@ -1092,7 +1092,7 @@ async def startup():
             INBOUNDS["default-reality"] = {
                 "name": "Reality+XHTTP پیش‌فرض",
                 "protocol": "reality",
-                "port": "",
+                "port": 8443,
                 "network": "xhttp",
                 "security": "reality",
                 "domain": "",
@@ -1104,7 +1104,7 @@ async def startup():
                 "xhttp_settings": {
                     "path": "/",
                     "xPaddingBytes": "100-1000",
-                    "mode": "auto",
+                    "mode": "stream-up",
                     "scMaxEachPostBytes": "1000000",
                 },
                 "created_at": datetime.now().isoformat(),
@@ -1259,16 +1259,10 @@ async def startup():
         _rs.setdefault("spiderx", "/")
         _rs.setdefault("dest", "is1-ssl.mzstatic.com:443")
         _rs.setdefault("sni", "is1-ssl.mzstatic.com")
-        # Xray must LISTEN on the same port the client connects to (external_port),
-        # otherwise the reality config in the client can't reach the server.
-        # If they differ, prefer the internal port (where Xray actually listens)
-        # and expose the same port to the client.
-        _ext = int(_ib.get("external_port") or 0)
-        _int = int(_ib.get("port") or 0)
-        if _ext and _int and _ext != _int:
-            _ib["external_port"] = _int
-            _changed = True
-            logger.info("Reality inbound «%s» client port synced to listen port %s", _ib.get("name"), _int)
+        # Internal and external ports are intentionally separate.
+        # Xray MUST listen on internal `port`; the client connects to
+        # external_domain:external_port (for example a Railway TCP proxy).
+        # Never overwrite one with the other.
 
     # WS/XHTTP-TLS inbounds are served by the FastAPI relay on the panel's own
     # port (CONFIG["port"]); the client-facing port stays 443 (Railway TLS).
@@ -1741,7 +1735,14 @@ def generate_user_config(user_id: str, user: dict, inbound_id: str = None, addr:
                       f"&pbk={pbk}&sid={sid}&spx={spx}")
         else:
             xpb = xs.get("xPaddingBytes", "100-1000")
-            xmod = xs.get("mode", "auto")
+            xmod = str(xs.get("mode") or "stream-up").strip().lower()
+            if xmod not in ("auto", "packet-up", "stream-up"):
+                xmod = "stream-up"
+            if xmod == "auto":
+                # Keep client/server mode deterministic. Recent Xray builds have
+                # compatibility issues when one side forces a concrete mode and
+                # the other advertises auto.
+                xmod = "stream-up"
             xsc = xs.get("scMaxEachPostBytes", "1000000")
             extra = quote('{{"xPaddingBytes":"{}","mode":"{}","scMaxEachPostBytes":"{}"}}'.format(xpb, xmod, xsc), safe='')
             # Use dest and server_names from reality_settings if provided
@@ -2922,7 +2923,7 @@ async def create_inbound(request: Request, _=Depends(require_auth)):
         }
     if protocol == "reality" and network == "xhttp" and not xhttp_settings.get("path"):
         xhttp_settings["path"] = "/"
-        xhttp_settings.setdefault("mode", "auto")
+        xhttp_settings.setdefault("mode", "stream-up")
         xhttp_settings.setdefault("xPaddingBytes", "100-1000")
         xhttp_settings.setdefault("scMaxEachPostBytes", "1000000")
     await save_state()
@@ -5338,6 +5339,7 @@ def _add_inbound_to_xray(cfg: dict, ib: dict, iid: str, host: str):
     
     inbound_obj = {
         "tag": f"inbound-{iid}",
+        "listen": "0.0.0.0",
         "port": port,
         # Xray has no "reality" protocol id — Reality is a security layer on top
         # of VLESS, so reality inbounds must declare protocol "vless".
@@ -5376,15 +5378,27 @@ def _add_inbound_to_xray(cfg: dict, ib: dict, iid: str, host: str):
 
     # Transport / Stream settings
     if protocol == "reality" or security == "reality":
-        rs_sni = "is1-ssl.mzstatic.com"  # fixed target per user request
+        # The Reality target is authoritative from this inbound's own
+        # SNI/Destination/Server Names. Do not silently replace it with a
+        # hard-coded target, otherwise the client SNI and Xray destination can
+        # describe different TLS targets.
+        rs_sni = str(rs.get("sni") or ib.get("sni") or "is1-ssl.mzstatic.com").strip()
+        rs_dest = str(rs.get("dest") or (rs_sni + ":443")).strip()
+        if "://" in rs_dest:
+            rs_dest = rs_dest.split("://", 1)[1]
+        rs_server_names = rs.get("server_names") or rs.get("serverNames") or [rs_sni]
+        if isinstance(rs_server_names, str):
+            rs_server_names = [x.strip() for x in rs_server_names.split(",") if x.strip()]
+        if not rs_server_names:
+            rs_server_names = [rs_sni]
         inbound_obj["streamSettings"] = {
             "network": network if network in ("tcp", "xhttp", "grpc") else "tcp",
             "security": "reality",
             "realitySettings": {
                 "show": False,
-                "dest": f"{rs_sni}:443",
+                "dest": rs_dest,
                 "xver": 0,
-                "serverNames": [rs_sni],
+                "serverNames": rs_server_names,
                 "privateKey": rs.get("private_key", ""),
                 "shortIds": [rs.get("short_id", "5a3ff5a13d")],
                 "spiderX": rs.get("spiderx", "/"),
@@ -5393,7 +5407,7 @@ def _add_inbound_to_xray(cfg: dict, ib: dict, iid: str, host: str):
                     "publicKey": rs.get("public_key", ""),
                     "privateKey": rs.get("private_key", ""),
                     "fingerprint": fingerprint,
-                    "serverName": rs_sni,
+                    "serverName": rs_server_names[0],
                     "spiderX": rs.get("spiderx", "/"),
                     "mldsa65Verify": rs.get("mldsa65_verify", ""),
                 },
@@ -5403,7 +5417,7 @@ def _add_inbound_to_xray(cfg: dict, ib: dict, iid: str, host: str):
             inbound_obj["streamSettings"]["xhttpSettings"] = {
                 "path": xh_settings.get("path", "/"),
                 "host": xh_settings.get("host", domain),
-                "mode": xh_settings.get("mode", "auto"),
+                "mode": (xh_settings.get("mode") if xh_settings.get("mode") in ("packet-up", "stream-up") else "stream-up"),
                 "xPaddingBytes": xh_settings.get("xPaddingBytes", "100-1000"),
                 "scMaxEachPostBytes": xh_settings.get("scMaxEachPostBytes", "1000000"),
                 "scMaxBufferedPosts": xh_settings.get("scMaxBufferedPosts", 30),
@@ -5535,12 +5549,22 @@ async def _xray_start(config: dict) -> bool:
             logger.warning(f"xray config write failed: {e}")
             return False
         try:
+            log_path = bin_path.parent / "xray-runtime.log"
+            log_fp = open(log_path, "ab", buffering=0)
             _xray_proc = await asyncio.create_subprocess_exec(
                 str(bin_path), "-c", str(cfg_path),
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
+                stdout=log_fp,
+                stderr=asyncio.subprocess.STDOUT,
             )
-            logger.info(f"Xray started (pid={_xray_proc.pid})")
+            await asyncio.sleep(0.8)
+            if _xray_proc.returncode is not None:
+                try:
+                    tail = log_path.read_text(errors="ignore")[-5000:]
+                except Exception:
+                    tail = ""
+                logger.error(f"Xray exited immediately (code={_xray_proc.returncode}). {tail}")
+                return False
+            logger.info(f"Xray started (pid={_xray_proc.pid}) on configured Reality ports")
             return True
         except Exception as e:
             logger.warning(f"xray start failed: {e}")
