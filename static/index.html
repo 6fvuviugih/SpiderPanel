@@ -1293,12 +1293,12 @@ tr{animation:fadeIn .3s ease}
             <div class="f-g" style="margin-top:10px"><label data-i18n="cfToken">Cloudflare API Token</label>
               <div style="display:flex;gap:8px">
                 <input type="password" id="wk-token" dir="ltr" style="flex:1" autocomplete="off">
-                <a class="btn btn-sm btn-g" href="https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22workers_routes%22%2C%22type%22%3A%22write%22%7D%2C%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22write%22%7D%2C%7B%22key%22%3A%22workers_kv_storage%22%2C%22type%22%3A%22write%22%7D%2C%7B%22key%22%3A%22workers_r2%22%2C%22type%22%3A%22write%22%7D%2C%7B%22key%22%3A%22account_settings%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22user_details%22%2C%22type%22%3A%22read%22%7D%5D&accountId=%2A&zoneId=all&name=spider-Token" target="_blank" rel="noopener" style="text-decoration:none;white-space:nowrap">
+                <a class="btn btn-sm btn-g" href="https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_kv_storage%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_routes%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22account_settings%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22zone%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22dns%22%2C%22type%22%3A%22edit%22%7D%5D&accountId=*&zoneId=all&name=spider-Token" target="_blank" rel="noopener" style="text-decoration:none;white-space:nowrap">
                   <span data-i18n="getToken">گرفتن توکن</span>
                 </a>
               </div>
             </div>
-            <div class="px-hint" style="font-size:10px;color:var(--txt2);margin-bottom:6px">توکن فقط باید دسترسی‌های لازم Worker را داشته باشد: Workers Scripts:Edit، Workers KV Storage:Edit، Workers Routes:Edit، Account Settings:Read و Zone:Read. نیازی به Email یا Account ID نیست — Account ID خودکار شناسایی می‌شود.</div>
+            <div class="px-hint" style="font-size:10px;color:var(--txt2);margin-bottom:6px">توکن فقط باید دسترسی‌های لازم Worker را داشته باشد: Workers Scripts:Edit، Workers KV Storage:Edit، Workers Routes:Edit، Account Settings:Read، Zone:Read و DNS:Edit. نیازی به Email یا Account ID نیست — Account ID خودکار شناسایی می‌شود.</div>
             <div class="px-hint" data-i18n="workerAutoName">نام و دامنه Worker به‌صورت خودکار از اکانت Cloudflare گرفته می‌شود.</div>
             <button class="btn btn-p" style="width:100%;margin-top:10px" onclick="workerSetup()"><span data-i18n="cfConnect">اتصال و Deploy</span></button>
           </div>
