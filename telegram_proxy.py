@@ -54,19 +54,23 @@ def _railway_tcp_info() -> tuple[str, int, int]:
 
 
 def _get_public_ip() -> str:
-    # Prefer Railway TCP proxy domain's resolved IPv4 for NAT-info; fall back to public web IP.
-    domain, _, _ = _railway_tcp_info()
-    if domain:
-        try:
-            return socket.gethostbyname(domain)
-        except Exception:
-            pass
+    # NAT-info must use the instance's real outbound/public IPv4.
+    # Do NOT resolve RAILWAY_TCP_PROXY_DOMAIN here: that is the inbound TCP
+    # proxy endpoint and is not necessarily the egress/NAT address used by
+    # MTProxy when it connects to Telegram DCs.
     try:
         import urllib.request
-        with urllib.request.urlopen("https://api.ipify.org", timeout=5) as r:
-            return r.read().decode().strip()
+        for url in ("https://api.ipify.org", "https://digitalresistance.dog/myIp"):
+            try:
+                with urllib.request.urlopen(url, timeout=5) as r:
+                    ip = r.read().decode().strip()
+                if ip:
+                    return ip
+            except Exception:
+                continue
     except Exception:
-        return ""
+        pass
+    return ""
 
 
 def _get_internal_ip() -> str:
@@ -103,7 +107,15 @@ class MTProtoProxyServer:
     def __init__(self, inbound_id: str, port: int, sni: str = "", destination: str = "", server_name: str = ""):
         self.inbound_id = inbound_id
         self.railway_domain, self.railway_public_port, railway_app_port = _railway_tcp_info()
-        self.port = int(railway_app_port or port)
+        # The inbound's Internal Port is authoritative for the MTProxy listener.
+        # Railway's TCP application port must be configured to the same value.
+        self.port = int(port)
+        if railway_app_port and int(railway_app_port) != self.port:
+            logger.warning(
+                "[TG Proxy %s] Railway TCP application port (%s) differs from inbound Internal Port (%s); "
+                "set RAILWAY_TCP_APPLICATION_PORT/TCP Proxy target to the Internal Port.",
+                inbound_id, railway_app_port, self.port,
+            )
         self.sni = self.destination = self.server_name = ""
         self._secrets_map: Dict[str, dict] = {}
         self._process: Optional[asyncio.subprocess.Process] = None

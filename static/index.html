@@ -2528,14 +2528,11 @@ async function loadTelegramRailwayInfo(){
   try {
     var r = await api('/api/telegram/railway-info');
     if (r.enabled) {
-      box.textContent = 'Railway TCP: ' + r.domain + ':' + r.public_port + ' → internal :' + r.application_port;
-      if ($id('ib-tg-intport')) $id('ib-tg-intport').value = r.application_port;
-      if ($id('ib-tg-extport')) $id('ib-tg-extport').value = r.public_port;
-      if ($id('ib-tg-domain')) $id('ib-tg-domain').value = r.domain;
+      box.textContent = 'Railway TCP advisory: ' + r.domain + ':' + r.public_port + ' → internal :' + r.application_port + ' | این مقادیر فرم را تغییر نمی‌دهند.';
     } else {
-      box.textContent = 'Railway TCP Proxy فعال نیست. در Settings → Networking → TCP Proxy برای همین سرویس فعالش کنید.';
+      box.textContent = 'Railway TCP Proxy فعال نیست. External Domain/Port و Internal Port را دستی وارد کنید و TCP Proxy را روی همان Internal Port تنظیم کنید.';
     }
-  } catch(e) { box.textContent = 'خطا در دریافت تنظیمات Railway TCP Proxy'; }
+  } catch(e) { box.textContent = 'اطلاعات Railway TCP در دسترس نیست؛ مقادیر دستی اینباند استفاده می‌شوند.'; }
 }
 
 function onProtocolChange() {
