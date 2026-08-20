@@ -953,6 +953,33 @@ Endpoint = {endpoint}
     return config.strip()
 
 
+def _railway_tcp_info() -> dict:
+    """Return Railway TCP Proxy routing metadata when TCP Proxy is enabled.
+
+    Railway exposes the externally reachable hostname/port separately from the
+    service's internal application port. Telegram MTProto must listen on the
+    internal TCP application port, while user links must use the public TCP
+    proxy domain/port.
+    """
+    domain = str(os.getenv("RAILWAY_TCP_PROXY_DOMAIN") or "").strip()
+    try:
+        public_port = int(str(os.getenv("RAILWAY_TCP_PROXY_PORT") or "0").strip() or 0)
+    except Exception:
+        public_port = 0
+    try:
+        app_port = int(str(os.getenv("RAILWAY_TCP_APPLICATION_PORT") or "0").strip() or 0)
+    except Exception:
+        app_port = 0
+    return {"domain": domain, "public_port": public_port, "application_port": app_port,
+            "enabled": bool(domain and public_port and app_port)}
+
+
+@app.get("/api/telegram/railway-info")
+async def telegram_railway_info(_=Depends(require_auth)):
+    info = _railway_tcp_info()
+    return {"ok": True, "advisory": True, "message": "Railway TCP variables are informational only; inbound External Domain/Port are authoritative.", **info}
+
+
 def generate_telegram_proxy_link(user_id: str, user: dict, inbound: dict, remark_tag: str = None) -> str:
     """Generate a Telegram Proxy link for a user based on the inbound settings.
 
@@ -965,9 +992,14 @@ def generate_telegram_proxy_link(user_id: str, user: dict, inbound: dict, remark
     config_uuid = user.get("config_uuid", user_id)
     tg = inbound.get("telegram_settings") or {}
 
-    external_domain = str(tg.get("external_domain") or "").strip()
-    external_port = int(tg.get("external_port") or 443)
-    if not external_domain:
+    # Telegram inbound settings are authoritative. Railway TCP variables are
+    # advisory only and must not override what the user entered in the inbound.
+    external_domain = str(tg.get("external_domain") or inbound.get("external_domain") or "").strip()
+    try:
+        external_port = int(tg.get("external_port") or inbound.get("external_port") or 0)
+    except Exception:
+        external_port = 0
+    if not external_domain or not external_port:
         return ""
 
     # Use stored secret or derive a stable one
@@ -1325,7 +1357,25 @@ async def _start_telegram_proxy(inbound_id: str, inbound: dict):
 
     await _stop_telegram_proxy(inbound_id)
     tg = inbound.get("telegram_settings") or {}
-    int_port = int(tg.get("internal_port") or inbound.get("port") or 44344)
+    # The inbound values are the single source of truth. Railway environment
+    # variables are informational only and must never silently rewrite them.
+    try:
+        int_port = int(tg.get("internal_port") or inbound.get("port") or 44344)
+    except Exception:
+        int_port = 44344
+    try:
+        ext_port = int(tg.get("external_port") or inbound.get("external_port") or 0)
+    except Exception:
+        ext_port = 0
+    ext_domain = str(tg.get("external_domain") or inbound.get("external_domain") or "").strip()
+    inbound["telegram_settings"] = {
+        "internal_port": int_port,
+        "external_port": ext_port,
+        "external_domain": ext_domain,
+    }
+    inbound["port"] = int_port
+    inbound["external_port"] = ext_port
+    inbound["external_domain"] = ext_domain
 
     secrets_map = {}
     async with USERS_LOCK:
@@ -1334,7 +1384,7 @@ async def _start_telegram_proxy(inbound_id: str, inbound: dict):
             if inbound_id in iids:
                 config_uuid = u.get("config_uuid", uid)
                 secret = str(u.get("telegram_secret") or "").strip().lower()
-                if not re.fullmatch(r"[0-9a-f]{32}", secret) or not secret.startswith("dd"):
+                if not re.fullmatch(r"[0-9a-f]{32}", secret):
                     secret = derive_secret_from_uuid(config_uuid)
                     u["telegram_secret"] = secret
                 secrets_map[secret] = {"user_id": uid, "config_uuid": config_uuid, "label": u.get("username", uid)}
@@ -2964,25 +3014,20 @@ async def update_inbound(inbound_id: str, request: Request, _=Depends(require_au
             ib["telegram_settings"] = body["telegram_settings"]
 
         if (ib.get("protocol") or "").lower() == "telegram":
+            # Telegram Proxy: inbound settings are authoritative. Railway TCP
+            # variables are advisory and must never overwrite user-entered
+            # External Domain / External Port / Internal Port.
             ib["sni"] = ""
             ib["destination"] = ""
             ib["server_name"] = ""
             tg = ib.setdefault("telegram_settings", {})
-            tg["internal_port"] = int(tg.get("internal_port") or body.get("port") or ib.get("port") or 44344)
-            tg["external_port"] = int(tg.get("external_port") or body.get("external_port") or ib.get("external_port") or 443)
-            tg["external_domain"] = str(tg.get("external_domain") or body.get("external_domain") or ib.get("external_domain") or "").strip()
-            ib["port"] = tg["internal_port"]
-            ib["external_port"] = tg["external_port"]
-            ib["external_domain"] = tg["external_domain"]
-        if (ib.get("protocol") or "").lower() == "telegram":
-            tg = ib.setdefault("telegram_settings", {})
-            # Telegram Proxy does not have SNI, Destination or Server Name.
+            incoming_tg = body.get("telegram_settings") or {}
+            tg["internal_port"] = int(incoming_tg.get("internal_port") or body.get("port") or tg.get("internal_port") or ib.get("port") or 44344)
+            tg["external_port"] = int(incoming_tg.get("external_port") or body.get("external_port") or tg.get("external_port") or ib.get("external_port") or 443)
+            tg["external_domain"] = str(incoming_tg.get("external_domain") or body.get("external_domain") or tg.get("external_domain") or ib.get("external_domain") or "").strip()
             ib.pop("sni", None)
             ib.pop("destination", None)
             ib.pop("server_name", None)
-            tg["internal_port"] = int((body.get("telegram_settings") or {}).get("internal_port") or body.get("port") or tg.get("internal_port") or ib.get("port") or 44344)
-            tg["external_port"] = int((body.get("telegram_settings") or {}).get("external_port") or body.get("external_port") or tg.get("external_port") or ib.get("external_port") or 443)
-            tg["external_domain"] = str((body.get("telegram_settings") or {}).get("external_domain") or body.get("external_domain") or tg.get("external_domain") or ib.get("external_domain") or "").strip()
             ib["port"] = tg["internal_port"]
             ib["external_port"] = tg["external_port"]
             ib["external_domain"] = tg["external_domain"]

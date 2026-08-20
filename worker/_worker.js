@@ -143,6 +143,16 @@ function parseVlessHeader(data) {
 }
 
 // ── Country Proxy Lookup ────────────────────────────────────────────────────
+async function getCountryProxy(env, code) {
+  try {
+    const raw = await env.SPIDER_KV.get('proxies') || '[]';
+    const list = JSON.parse(raw);
+    const loc = list.find(x => String(x.code || '').toLowerCase() === code);
+    if (!loc) return '';
+    return String(loc.proxy || ((loc.proxies || [])[0]) || '');
+  } catch (e) { return ''; }
+}
+
 // ── Outbound Connection ─────────────────────────────────────────────────────
 function getConnector() {
   return typeof connect === 'function' ? connect : null;
@@ -182,19 +192,6 @@ async function openSocket(hostname, port) {
     if (!sock || !sock.readable || !sock.writable) return null;
     return { socket: sock, reader: sock.readable.getReader(), writer: sock.writable.getWriter() };
   } catch (e) { return null; }
-}
-
-// Plain entries from the panel's daily ProxyIP source are RAW TCP relay
-// endpoints (host:port), not HTTP CONNECT proxies. Treating them as HTTP
-// proxies makes VLESS handshakes fail immediately because the relay expects
-// the original TLS/VLESS bytes rather than an HTTP CONNECT request.
-async function rawProxyConnect(proxy, targetHost, targetPort) {
-  const host = String(proxy.hostname || '').trim();
-  const port = Number(proxy.port || 443);
-  if (!host || !port) return null;
-  // For a raw relay, the target host/port are intentionally not sent here: the
-  // first bytes written by VLESS are forwarded unchanged by the relay.
-  return openSocket(host, port);
 }
 async function httpConnect(proxy, targetHost, targetPort) {
   const conn = await openSocket(proxy.hostname, proxy.port);
@@ -259,21 +256,9 @@ async function socks5Connect(proxy, targetHost, targetPort) {
     return conn;
   } catch (e) { try { conn.socket.close(); } catch(_){} return null; }
 }
-async function connectViaProxy(proxyEntry, targetHost, targetPort, defaultPort) {
-  // proxyEntry may be a string (legacy) or an object from the panel API.
-  const raw = (proxyEntry && typeof proxyEntry === 'object') ? proxyEntry.proxy || proxyEntry.address || '' : proxyEntry;
-  const proxy = parseProxyEntry(raw);
+async function connectViaProxy(proxyEntry, targetHost, targetPort) {
+  const proxy = parseProxyEntry(proxyEntry);
   if (!proxy) return null;
-
-  // Explicit proxy schemes mean a real HTTP/SOCKS proxy. Plain host:port
-  // entries are RAW TCP relays and must NOT receive CONNECT/SOCKS negotiation.
-  const explicitScheme = /^(socks5|socks4|http|https):\/\//i.test(String(raw || '').trim());
-  if (!explicitScheme) {
-    if (proxyEntry && typeof proxyEntry === 'object' && Number(proxyEntry.port) > 0 && !/:[0-9]+$/.test(String(raw))) {
-      proxy.port = Number(proxyEntry.port);
-    }
-    return rawProxyConnect(proxy, targetHost, targetPort);
-  }
   if (proxy.protocol === 'socks5' || proxy.protocol === 'socks4') return socks5Connect(proxy,targetHost,targetPort);
   return httpConnect(proxy,targetHost,targetPort);
 }
@@ -282,22 +267,20 @@ async function getCountryProxy(env, code) {
     const raw = await env.SPIDER_KV.get('proxies') || '[]';
     const list = JSON.parse(raw);
     const loc = list.find(x => String(x.code || '').toLowerCase() === String(code || '').toLowerCase());
-    if (!loc) return null;
-    const proxy = String(loc.proxy || ((loc.proxies || [])[0]) || '').trim();
-    if (!proxy) return null;
-    return { code: String(loc.code || code).toLowerCase(), country: loc.country || code, proxy, port: Number(loc.port) || 443 };
-  } catch (e) { return null; }
+    if (!loc) return '';
+    return String(loc.proxy || ((loc.proxies || [])[0]) || '');
+  } catch (e) { return ''; }
 }
 async function getAnyProxy(env) {
   try {
     const raw = await env.SPIDER_KV.get('proxies') || '[]';
     const list = JSON.parse(raw);
     for (const loc of list) {
-      const proxy = String(loc.proxy || ((loc.proxies || [])[0]) || '').trim();
-      if (proxy) return { code: String(loc.code || '').toLowerCase(), country: loc.country || '', proxy, port: Number(loc.port) || 443 };
+      const p = String(loc.proxy || ((loc.proxies || [])[0]) || '').trim();
+      if (p) return p;
     }
   } catch (e) {}
-  return null;
+  return '';
 }
 
 // ── VLESS WebSocket Tunnel ──────────────────────────────────────────────────
@@ -341,16 +324,13 @@ async function handleVlessWs(request, env, country, preUser) {
       // The Worker is the public VLESS endpoint. The VLESS target is commonly
       // the same Worker domain, so connecting directly would loop back into the
       // Worker. Always use a real outbound proxy/relay when available.
-      let proxy = null;
+      let proxy = '';
       if (country) proxy = await getCountryProxy(env, country);
-      // User-specific proxy wins over the shared pool. Plain host:port values
-      // are treated as raw TCP relays; explicit http/socks5:// schemes keep
-      // their normal proxy negotiation.
-      if (!proxy && user.proxy_ip) proxy = { proxy: String(user.proxy_ip).trim(), port: 443 };
+      if (!proxy) proxy = user.proxy_ip;
       if (!proxy) proxy = await getAnyProxy(env);
 
       let conn = null;
-      if (proxy) conn = await connectViaProxy(proxy, h.address, h.port, proxy.port);
+      if (proxy) conn = await connectViaProxy(proxy, h.address, h.port);
       if (!conn) {
         // Only permit direct mode when the target is not the Worker itself.
         const targetHost = String(h.address || '').toLowerCase();

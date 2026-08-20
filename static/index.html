@@ -1590,6 +1590,7 @@ tr{animation:fadeIn .3s ease}
         <div class="f-g"><label>External Port</label><input type="number" id="ib-tg-extport" value="443" dir="ltr" placeholder="443"></div>
       </div>
       <div class="f-g"><label>External Domain</label><input type="text" id="ib-tg-domain" dir="ltr" placeholder="proxy.example.com"></div>
+      <div id="ib-tg-railway-info" class="px-hint" style="margin-top:-4px">External Domain/Port entered for this Telegram inbound are authoritative. Railway TCP values are shown only as advisory.</div>
     </div>
 
     <!-- Network group -->
@@ -2521,6 +2522,22 @@ function onSecurityChange() {
   }
 }
 
+async function loadTelegramRailwayInfo(){
+  var box = $id('ib-tg-railway-info');
+  if (!box) return;
+  try {
+    var r = await api('/api/telegram/railway-info');
+    if (r.enabled) {
+      box.textContent = 'Railway TCP: ' + r.domain + ':' + r.public_port + ' → internal :' + r.application_port;
+      if ($id('ib-tg-intport')) $id('ib-tg-intport').value = r.application_port;
+      if ($id('ib-tg-extport')) $id('ib-tg-extport').value = r.public_port;
+      if ($id('ib-tg-domain')) $id('ib-tg-domain').value = r.domain;
+    } else {
+      box.textContent = 'Railway TCP Proxy فعال نیست. در Settings → Networking → TCP Proxy برای همین سرویس فعالش کنید.';
+    }
+  } catch(e) { box.textContent = 'خطا در دریافت تنظیمات Railway TCP Proxy'; }
+}
+
 function onProtocolChange() {
   var proto = $id('ib-protocol').value;
   var isWg = proto === 'wireguard';
@@ -2532,6 +2549,7 @@ function onProtocolChange() {
   toggleById('ib-wg-fields', isWg);
   toggleById('ib-tg-fields', isTg);
   if (isWg) loadWGEndpoints();
+  if (isTg) loadTelegramRailwayInfo();
 }
 
 function onNetworkChange() {
