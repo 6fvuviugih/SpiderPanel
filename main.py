@@ -6511,13 +6511,19 @@ async def worker_setup(request: Request, _=Depends(require_auth)):
 
     # 2. Auto-detect account_id if not provided (list accounts and pick the first one).
     if not account_id:
-        code_acc, data_acc = await _cf_api("GET", "/accounts", token, email=email)
+        code_acc, data_acc = await _cf_api("GET", "/accounts?page=1&per_page=50", token, email=email)
         if code_acc == 200 and data_acc.get("result"):
             accounts = data_acc["result"]
             if isinstance(accounts, list) and len(accounts) > 0:
                 account_id = accounts[0].get("id", "")
         if not account_id:
-            raise HTTPException(status_code=400, detail="Could not auto-detect Cloudflare Account ID. Make sure your token has account read permission.")
+            # Cloudflare returns 403/10000 here when the token is valid but lacks
+            # account-scoped Workers permissions. Surface the actual API error.
+            detail = "Could not auto-detect Cloudflare Account ID. Token must include account-scoped Workers Scripts/Routes/KV permissions."
+            errs = data_acc.get("errors") or []
+            if errs:
+                detail = "Cloudflare account lookup failed: " + "; ".join(str(e.get("message") or e.get("code") or "unknown error") for e in errs[:3])
+            raise HTTPException(status_code=400, detail=detail)
 
     # 3. Discover the worker name + subdomain from the account.
     worker_name = str(body.get("worker_name") or "spider-proxy").strip()
