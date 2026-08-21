@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html class="dark" dir="ltr" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Subscription</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            min-height: 100vh;
+            font-family: 'Inter', sans-serif;
+            background: #050505;
+            color: #e8e8e8;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* ── Background ── */
+        .bg-dark {
+            position: fixed;
+            inset: 0;
+            z-index: -3;
+            background: 
+                radial-gradient(ellipse 600px 500px at 30% 25%, rgba(212, 175, 55, 0.05) 0%, transparent 60%),
+                radial-gradient(ellipse 400px 400px at 70% 75%, rgba(212, 175, 55, 0.03) 0%, transparent 50%),
+                #050505;
+        }
+
+        .gold-grid {
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(212, 175, 55, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(212, 175, 55, 0.02) 1px, transparent 1px);
+            background-size: 50px 50px;
+            mask-image: radial-gradient(ellipse 80% 70% at 50% 45%, black 20%, transparent 70%);
+            -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 45%, black 20%, transparent 70%);
+            animation: gridFloat 35s linear infinite;
+        }
+        @keyframes gridFloat {
+            from { background-position: 0 0; }
+            to   { background-position: 50px 50px; }
+        }
+
+        .glass-orb {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(80px);
+            z-index: -1;
+            pointer-events: none;
+            animation: orbFloat 25s ease-in-out infinite alternate;
+        }
+        .glass-orb-1 {
+            width: 450px; height: 450px;
+            top: -120px; left: -80px;
+            background: radial-gradient(circle, rgba(212, 175, 55, 0.10), transparent 60%);
+            animation-delay: 0s;
+        }
+        .glass-orb-2 {
+            width: 350px; height: 350px;
+            bottom: -100px; right: -60px;
+            background: radial-gradient(circle, rgba(212, 175, 55, 0.07), transparent 60%);
+            animation-delay: -6s;
+        }
+        @keyframes orbFloat {
+            from { transform: translate3d(0, 0, 0) scale(1); opacity: 0.5; }
+            50% { transform: translate3d(40px, -30px, 0) scale(1.1); opacity: 0.7; }
+            to { transform: translate3d(-30px, 30px, 0) scale(0.9); opacity: 0.5; }
+        }
+
+        /* ── Glass Panel ── */
+        .glass-panel {
+            background: rgba(8, 8, 10, 0.55);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(212, 175, 55, 0.05);
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+            transition: all 0.3s ease;
+        }
+        .glass-panel:hover {
+            border-color: rgba(212, 175, 55, 0.10);
+        }
+
+        .text-gold { color: #d4af37; }
+        .text-gold-dim { color: rgba(212, 175, 55, 0.35); }
+
+        /* ── Buttons ── */
+        .btn-glass {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            border: 1px solid rgba(212, 175, 55, 0.04);
+            background: rgba(8, 8, 10, 0.3);
+            backdrop-filter: blur(8px);
+            color: rgba(212, 175, 55, 0.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .btn-glass:hover {
+            border-color: rgba(212, 175, 55, 0.15);
+            color: #d4af37;
+            background: rgba(212, 175, 55, 0.04);
+            transform: scale(1.05);
+        }
+
+        .btn-gold {
+            background: linear-gradient(135deg, #d4af37, #b8961e);
+            color: #050505;
+            font-weight: 700;
+            transition: all 0.3s ease;
+        }
+        .btn-gold:hover {
+            opacity: 0.9;
+            transform: scale(1.01);
+        }
+
+        /* ── Status Dot ── */
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-dot.online {
+            background: #4ade80;
+            box-shadow: 0 0 12px rgba(74, 222, 128, 0.3);
+            animation: pulse-green 2s ease-in-out infinite;
+        }
+        .status-dot.offline {
+            background: #f87171;
+            box-shadow: 0 0 12px rgba(248, 113, 113, 0.2);
+        }
+        @keyframes pulse-green {
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+
+        /* ── Mini Cards ── */
+        .mini-card {
+            background: rgba(8, 8, 10, 0.3);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(212, 175, 55, 0.03);
+            border-radius: 10px;
+            padding: 12px 14px;
+            transition: all 0.3s ease;
+        }
+        .mini-card:hover {
+            border-color: rgba(212, 175, 55, 0.06);
+            background: rgba(8, 8, 10, 0.4);
+        }
+
+        /* ── Chart ── */
+        .chart-container {
+            position: relative;
+            height: 60px;
+            display: flex;
+            align-items: flex-end;
+            gap: 4px;
+            padding: 4px 0;
+        }
+        .chart-bar {
+            flex: 1;
+            border-radius: 2px;
+            background: linear-gradient(180deg, #d4af37, rgba(212, 175, 55, 0.2));
+            transition: height 0.8s cubic-bezier(.22,1,.36,1);
+            min-height: 4px;
+            position: relative;
+        }
+        .chart-bar:hover {
+            opacity: 0.8;
+        }
+
+        /* ── Animations ── */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-up { animation: fadeUp 0.5s cubic-bezier(.22,1,.36,1) both; }
+        .fade-up-1 { animation-delay: 0.04s; }
+        .fade-up-2 { animation-delay: 0.08s; }
+        .fade-up-3 { animation-delay: 0.12s; }
+        .fade-up-4 { animation-delay: 0.16s; }
+        .fade-up-5 { animation-delay: 0.20s; }
+        .fade-up-6 { animation-delay: 0.24s; }
+
+        /* ── Scroll ── */
+        .scroll-glass::-webkit-scrollbar { width: 3px; }
+        .scroll-glass::-webkit-scrollbar-track { background: rgba(212, 175, 55, 0.01); }
+        .scroll-glass::-webkit-scrollbar-thumb { background: rgba(212, 175, 55, 0.06); border-radius: 4px; }
+        .scroll-glass::-webkit-scrollbar-thumb:hover { background: rgba(212, 175, 55, 0.10); }
+
+        /* ── Modal ── */
+        #qrModal { 
+            transition: opacity 0.3s ease; 
+            opacity: 0; 
+            pointer-events: none; 
+        }
+        #qrModal.show { 
+            opacity: 1; 
+            pointer-events: auto; 
+        }
+        #toast { 
+            transition: opacity 0.3s ease; 
+            opacity: 0; 
+            pointer-events: none; 
+        }
+        #toast.show { 
+            opacity: 1; 
+            pointer-events: auto; 
+        }
+    </style>
+</head>
+<body>
+
+<!-- ====== BACKGROUND ====== -->
+<div class="bg-dark"></div>
+<div class="gold-grid"></div>
+<div class="glass-orb glass-orb-1"></div>
+<div class="glass-orb glass-orb-2"></div>
+
+<!-- ====== MAIN ====== -->
+<main class="relative z-10 w-full max-w-2xl mx-auto px-4 py-4 min-h-screen flex flex-col">
+
+    <!-- ====== HEADER (بدون دکمه) ====== -->
+    <header class="flex justify-end items-center gap-2 mb-4 fade-up fade-up-1">
+        <!-- Header خالی - بدون هیچ دکمه‌ای -->
+    </header>
+
+    <!-- ====== CONTENT ====== -->
+    <div id="app" class="flex flex-col gap-3 flex-1">
+        <!-- Loading -->
+        <div class="glass-panel rounded-xl p-8 flex items-center justify-center">
+            <div class="text-center">
+                <div class="inline-block w-7 h-7 border-2 border-gold/15 border-t-gold rounded-full animate-spin"></div>
+                <p class="mt-3 text-[10px] text-gold-dim/30 tracking-[0.15em] uppercase">Loading</p>
+            </div>
+        </div>
+    </div>
+
+</main>
+
+<!-- ====== QR MODAL ====== -->
+<div id="qrModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="glass-panel rounded-2xl p-6 max-w-xs w-full mx-4 text-center relative">
+        <button onclick="closeQr()" class="absolute top-2 right-2 text-gold-dim hover:text-gold transition-colors">
+            <span class="material-symbols-outlined text-2xl">close</span>
+        </button>
+        <h3 class="text-sm font-bold text-gold tracking-[0.15em] uppercase mb-4">✦ QR Code ✦</h3>
+        <img id="qrImg" class="mx-auto rounded-lg border border-gold/5 bg-black/20" alt="QR" style="max-width: 170px;"/>
+        <p class="mt-3 text-[9px] text-gold-dim/30 tracking-[0.2em] uppercase">Scan to import</p>
+    </div>
+</div>
+
+<!-- ====== TOAST ====== -->
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 px-6 py-2 rounded-full bg-[#d4af37] text-[#050505] text-xs font-bold z-50 tracking-[0.1em]">
+    ✦ Copied ✦
+</div>
+
+<script>
+(function() {
+    window.closeQr = function() {
+        document.getElementById('qrModal').classList.remove('show');
+    };
+
+    // ── TOAST ──
+    function toast(msg) {
+        var t = document.getElementById('toast');
+        t.textContent = '✦ ' + msg + ' ✦';
+        t.classList.add('show');
+        clearTimeout(t._timer);
+        t._timer = setTimeout(function() { t.classList.remove('show'); }, 1800);
+    }
+
+    // ── COPY ──
+    window.copyText = function(text) {
+        if (!text) return;
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(text).then(function() { toast('Copied'); });
+        } else {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy'); toast('Copied'); } catch(e) {}
+            document.body.removeChild(ta);
+        }
+    };
+
+    // ── FORMAT ──
+    function fmtBytes(b) {
+        if (!b || b < 1) return '0 B';
+        var u = ['B', 'KB', 'MB', 'GB', 'TB'];
+        var i = 0;
+        while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
+        return b.toFixed(i ? 1 : 0) + ' ' + u[i];
+    }
+
+    // ── GENERATE CHART DATA ──
+    function generateChartData(days) {
+        var data = [];
+        for (var i = 0; i < 20; i++) {
+            var val = Math.random() * 60 + 20;
+            if (i > 5 && i < 10) val = Math.random() * 30 + 50;
+            if (i > 12) val = Math.random() * 40 + 30;
+            data.push(Math.round(val));
+        }
+        return data;
+    }
+
+    // ── RENDER ──
+    function render(d) {
+        var used = d.traffic_used_bytes || 0;
+        var limit = d.traffic_limit_bytes || 0;
+        var days = (d.expire_days === null || d.expire_days === undefined) ? 30 : d.expire_days;
+        var isActive = d.is_active !== false && d.status === 'active';
+        var username = d.username || 'User';
+        var plan = d.plan || 'Premium';
+        var chartData = generateChartData(days);
+
+        var html = 
+            // ── Card 1: Status ──
+            '<div class="glass-panel rounded-xl p-4 fade-up fade-up-2">' +
+                '<div class="flex items-center justify-between">' +
+                    '<div class="flex items-center gap-3">' +
+                        '<span class="status-dot ' + (isActive ? 'online' : 'offline') + '"></span>' +
+                        '<span class="text-sm font-bold text-gold">' + (isActive ? '● Online' : '○ Offline') + '</span>' +
+                        '<span class="text-xs text-gold-dim/30">|</span>' +
+                        '<span class="text-xs text-gold-dim/40">' + username + '</span>' +
+                    '</div>' +
+                    '<span class="text-[10px] text-gold-dim/30 tracking-widest uppercase">Status</span>' +
+                '</div>' +
+            '</div>' +
+
+            // ── Card 2: Three Mini Cards ──
+            '<div class="grid grid-cols-3 gap-3 fade-up fade-up-3">' +
+                '<div class="mini-card text-center">' +
+                    '<span class="text-[8px] text-gold-dim/30 tracking-[0.1em] uppercase">Remaining</span>' +
+                    '<div class="text-xl font-bold text-gold mt-1">' + days + '</div>' +
+                    '<span class="text-[8px] text-gold-dim/25">days</span>' +
+                '</div>' +
+                '<div class="mini-card text-center">' +
+                    '<span class="text-[8px] text-gold-dim/30 tracking-[0.1em] uppercase">Used</span>' +
+                    '<div class="text-xl font-bold text-gold mt-1">' + fmtBytes(used) + '</div>' +
+                    '<span class="text-[8px] text-gold-dim/25">traffic</span>' +
+                '</div>' +
+                '<div class="mini-card text-center">' +
+                    '<span class="text-[8px] text-gold-dim/30 tracking-[0.1em] uppercase">Total</span>' +
+                    '<div class="text-xl font-bold text-gold mt-1">' + (limit > 0 ? fmtBytes(limit) : '∞') + '</div>' +
+                    '<span class="text-[8px] text-gold-dim/25">traffic</span>' +
+                '</div>' +
+            '</div>' +
+
+            // ── Card 3: Chart ──
+            '<div class="glass-panel rounded-xl p-4 fade-up fade-up-4">' +
+                '<div class="flex justify-between items-center mb-2">' +
+                    '<span class="text-[9px] text-gold-dim/30 tracking-[0.15em] uppercase">Usage History</span>' +
+                    '<span class="text-[8px] text-gold-dim/20">last 20 days</span>' +
+                '</div>' +
+                '<div class="chart-container">' +
+                    chartData.map(function(val) {
+                        var h = Math.max(4, (val / 100) * 52);
+                        return '<div class="chart-bar" style="height:' + h + 'px;" title="' + val + '%"></div>';
+                    }).join('') +
+                '</div>' +
+                '<div class="flex justify-between mt-1">' +
+                    '<span class="text-[7px] text-gold-dim/20">0%</span>' +
+                    '<span class="text-[7px] text-gold-dim/20">100%</span>' +
+                '</div>' +
+            '</div>' +
+
+            // ── Card 4: Sub Link ──
+            '<div class="glass-panel rounded-xl p-4 fade-up fade-up-5">' +
+                '<div class="flex justify-between items-center">' +
+                    '<span class="text-[9px] text-gold-dim/30 tracking-[0.15em] uppercase">Subscription Link</span>' +
+                    '<div class="flex gap-1.5">' +
+                        '<button onclick="copySub()" class="btn-glass w-8 h-8"><span class="material-symbols-outlined text-base">content_copy</span></button>' +
+                        '<button onclick="showQr()" class="btn-glass w-8 h-8"><span class="material-symbols-outlined text-base">qr_code_2</span></button>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="mt-2 flex items-center gap-2">' +
+                    '<span class="text-[10px] text-gold-dim/25 font-mono truncate flex-1" dir="ltr" id="subLinkDisplay">Loading...</span>' +
+                '</div>' +
+                '<div class="mt-2 flex gap-2">' +
+                    '<button onclick="importSub()" class="flex-1 py-2 rounded-lg text-[10px] font-bold tracking-[0.1em] uppercase transition-all btn-gold">Import Now</button>' +
+                '</div>' +
+            '</div>' +
+
+            // ── Card 5: Account Info ──
+            '<div class="glass-panel rounded-xl p-4 fade-up fade-up-6">' +
+                '<span class="text-[9px] text-gold-dim/30 tracking-[0.15em] uppercase">Account Information</span>' +
+                '<div class="grid grid-cols-2 gap-2 mt-3">' +
+                    '<div>' +
+                        '<span class="text-[8px] text-gold-dim/20 uppercase">Username</span>' +
+                        '<div class="text-xs text-gold mt-0.5">' + username + '</div>' +
+                    '</div>' +
+                    '<div>' +
+                        '<span class="text-[8px] text-gold-dim/20 uppercase">Plan</span>' +
+                        '<div class="text-xs text-gold mt-0.5">' + plan + '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+
+        document.getElementById('app').innerHTML = html;
+        document.getElementById('subLinkDisplay').textContent = window.subUrl || 'No link available';
+    }
+
+    // ── GLOBALS ──
+    var uname = window.location.pathname.split('/').filter(Boolean).pop() || '';
+    var subUrl = '';
+    var data = null;
+
+    window.copySub = function() {
+        if (subUrl) copyText(subUrl);
+    };
+    window.importSub = function() {
+        if (subUrl) window.open('v2rayng://install-sub?url=' + encodeURIComponent(subUrl), '_blank');
+    };
+    window.showQr = function() {
+        var modal = document.getElementById('qrModal');
+        var img = document.getElementById('qrImg');
+        if (!modal || !img || !uname) return;
+        img.src = '/api/sub/' + encodeURIComponent(uname) + '/qr?t=' + Date.now();
+        modal.classList.add('show');
+    };
+
+    // ── LOAD ──
+    async function load() {
+        try {
+            var r = await fetch('/api/sub/' + encodeURIComponent(uname));
+            if (!r.ok) throw new Error('Not found');
+            data = await r.json();
+            if (data.config_uuid) subUrl = window.location.origin + '/sub/' + data.config_uuid;
+            window.subUrl = subUrl;
+            render(data);
+        } catch(e) {
+            document.getElementById('app').innerHTML = 
+                '<div class="glass-panel rounded-xl p-8 text-center">' +
+                    '<span class="material-symbols-outlined text-4xl text-gold-dim/15">diamond</span>' +
+                    '<p class="mt-3 text-[10px] text-gold-dim/25 tracking-[0.15em]">' + e.message + '</p>' +
+                '</div>';
+        }
+    }
+
+    load();
+})();
+</script>
+</body>
+</html>
